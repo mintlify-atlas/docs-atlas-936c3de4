@@ -1,80 +1,336 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get started with Polaris in minutes - from account creation to your first AI-powered project
 ---
 
-## Get started in three steps
+# Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through creating your account, setting up your first project, and using Polaris's AI features.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+This quickstart is for users of the hosted Polaris service. If you're self-hosting, see the [Installation Guide](/installation).
 </Note>
+
+## Prerequisites
+
+All you need is:
+- A modern web browser (Chrome, Firefox, Safari, or Edge)
+- A GitHub account (for authentication)
+- 5 minutes of your time
+
+## Step 1: Create Your Account
+
+<Steps>
+  <Step title="Sign Up with GitHub">
+    Navigate to the Polaris homepage and click "Sign in with GitHub". Polaris uses Clerk for secure authentication with GitHub OAuth.
+    
+    ```typescript
+    // Authentication is handled by Clerk
+    import { auth } from "@clerk/nextjs/server";
+    
+    const { userId } = await auth();
+    ```
+  </Step>
+  
+  <Step title="Authorize Access">
+    Grant Polaris permission to access your GitHub profile. This enables future features like repository import/export.
+  </Step>
+  
+  <Step title="Complete Setup">
+    You'll be redirected to your projects dashboard at `/projects`. You're now ready to create your first project!
+  </Step>
+</Steps>
+
+## Step 2: Create Your First Project
+
+<Steps>
+  <Step title="Open Project Dialog">
+    Click the "New Project" button in the dashboard. You'll see a prompt input powered by AI.
+    
+    <Info>
+    Projects in Polaris are stored in Convex with this schema:
+    
+    ```typescript
+    projects: defineTable({
+      name: v.string(),
+      ownerId: v.string(),
+      updatedAt: v.number(),
+      settings: v.optional(
+        v.object({
+          installCommand: v.optional(v.string()),
+          devCommand: v.optional(v.string()),
+        })
+      ),
+    }).index("by_owner", ["ownerId"])
+    ```
+    </Info>
+  </Step>
+  
+  <Step title="Describe Your Project">
+    Type what you want to build in natural language:
+    
+    - "Build a todo app with React"
+    - "Create a landing page for a SaaS product"
+    - "Set up a Node.js Express API"
+    
+    Press Enter or click Submit. Polaris will create your project workspace.
+  </Step>
+  
+  <Step title="Explore the IDE">
+    Your project opens in the Polaris IDE with three main areas:
+    
+    - **Left Sidebar**: AI conversation panel for context-aware assistance
+    - **Center**: File explorer and code editor with syntax highlighting
+    - **Top Bar**: Project settings and navigation
+    
+    The layout uses resizable panes powered by Allotment:
+    
+    ```typescript
+    <Allotment defaultSizes={[400, 1000]}>
+      <Allotment.Pane minSize={200} maxSize={800}>
+        <ConversationSidebar projectId={projectId} />
+      </Allotment.Pane>
+      <Allotment.Pane>
+        {/* Editor and file explorer */}
+      </Allotment.Pane>
+    </Allotment>
+    ```
+  </Step>
+</Steps>
+
+## Step 3: Create Your First File
+
+<Steps>
+  <Step title="Open File Explorer">
+    In the center panel, you'll see your project's file tree. Right-click in the explorer to see options.
+  </Step>
+  
+  <Step title="Create a New File">
+    Right-click and select "New File" or click the + icon. Name your file with an extension (e.g., `app.js`, `index.html`, `README.md`).
+    
+    <Info>
+    Polaris supports syntax highlighting for:
+    - JavaScript/TypeScript (`.js`, `.ts`, `.jsx`, `.tsx`)
+    - HTML (`.html`)
+    - CSS (`.css`)
+    - JSON (`.json`)
+    - Markdown (`.md`)
+    - Python (`.py`)
+    </Info>
+  </Step>
+  
+  <Step title="Start Typing">
+    Click on your new file to open it in the editor. The CodeMirror 6 editor provides:
+    
+    - Line numbers and code folding
+    - Bracket matching
+    - Indentation guides
+    - Minimap overview
+    - Auto-save (files save automatically as you type)
+  </Step>
+</Steps>
+
+## Step 4: Use AI Suggestions
+
+Polaris provides real-time code completions as you type.
+
+<Steps>
+  <Step title="Start Coding">
+    Begin typing in your file. After a brief pause (300ms debounce), Polaris analyzes your code:
+    
+    ```typescript
+    // The suggestion system sends context to the AI
+    const payload = {
+      fileName: 'app.js',
+      code: fullFileContent,
+      currentLine: 'function handleClick',
+      previousLines: '...5 lines of context...',
+      textBeforeCursor: 'function handle',
+      textAfterCursor: 'Click() {',
+      nextLines: '...5 lines of context...',
+      lineNumber: 42
+    }
+    ```
+  </Step>
+  
+  <Step title="Review Suggestions">
+    You'll see ghost text (grayed out) suggesting your next code. This appears inline at your cursor position.
+    
+    ```typescript
+    // Suggestions render as decorations
+    class SuggestionWidget extends WidgetType {
+      toDOM() {
+        const span = document.createElement("span");
+        span.textContent = this.text;
+        span.style.opacity = "0.4"; // Ghost text
+        return span;
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Accept Suggestions">
+    Press **Tab** to accept the suggestion. The ghost text becomes real code and your cursor moves to the end.
+    
+    <Info>
+    If you don't want the suggestion, just keep typing - it will disappear and a new one will generate based on your changes.
+    </Info>
+  </Step>
+</Steps>
+
+## Step 5: Use Quick Edit (Cmd+K)
+
+Quick Edit lets you modify code using natural language instructions.
+
+<Steps>
+  <Step title="Select Code">
+    Highlight the code you want to modify. A tooltip will appear with two options:
+    
+    - **Add to Chat**: Adds the selection to your conversation
+    - **Quick Edit (⌘K)**: Opens the inline edit interface
+    
+    ```typescript
+    // Selection tooltip component
+    const quickEditButton = document.createElement("button");
+    quickEditButton.textContent = "Quick Edit";
+    quickEditButton.className = "p-1 px-2 hover:bg-foreground/10";
+    ```
+  </Step>
+  
+  <Step title="Describe the Change">
+    Press **Cmd+K** (Mac) or **Ctrl+K** (Windows/Linux). Type your instruction:
+    
+    - "Add error handling"
+    - "Convert this to async/await"
+    - "Add TypeScript types"
+    - "Refactor using modern ES6 syntax"
+    
+    You can even include URLs to documentation:
+    
+    ```typescript
+    // Polaris will scrape and use the docs
+    "Add validation using https://zod.dev"
+    ```
+  </Step>
+  
+  <Step title="Review and Apply">
+    Polaris sends your selection and instruction to Claude Sonnet 4:
+    
+    ```typescript
+    const prompt = `You are a code editing assistant.
+    
+    <selected_code>
+    ${selectedCode}
+    </selected_code>
+    
+    <instruction>
+    ${instruction}
+    </instruction>
+    
+    Return ONLY the edited version of the selected code.
+    Maintain the same indentation level as the original.`;
+    ```
+    
+    The edited code replaces your selection automatically. If you don't like it, use Cmd+Z to undo.
+  </Step>
+</Steps>
+
+## Step 6: Chat with AI Assistant
+
+The conversation sidebar provides a ChatGPT-like interface with full project awareness.
+
+<Steps>
+  <Step title="Open Conversation Panel">
+    The left sidebar shows your conversation history. Each project has its own conversation thread stored in Convex:
+    
+    ```typescript
+    conversations: defineTable({
+      projectId: v.id("projects"),
+      title: v.string(),
+      updatedAt: v.number(),
+    }).index("by_project", ["projectId"])
+    ```
+  </Step>
+  
+  <Step title="Ask Questions">
+    Type questions or requests in the input at the bottom:
+    
+    - "Explain how this function works"
+    - "Add a README with installation instructions"
+    - "Find bugs in my authentication logic"
+    - "Suggest improvements to this component"
+  </Step>
+  
+  <Step title="Get Contextual Responses">
+    The AI has access to your entire project structure and can reference specific files. Responses stream in real-time using the Vercel AI SDK.
+    
+    <Warning>
+    In Part 1, the AI cannot directly modify files - this feature is coming in Part 2 with the AI Agent implementation using Inngest AgentKit.
+    </Warning>
+  </Step>
+</Steps>
+
+## Next Steps
+
+You're now ready to build with Polaris! Here are some things to try:
+
+<CardGroup cols={2}>
+  <Card title="Organize Files" icon="folder-tree">
+    Create folders, rename files, and structure your project
+  </Card>
+  <Card title="Explore Keyboard Shortcuts" icon="keyboard">
+    Use Cmd+K for quick edit and Tab for suggestions
+  </Card>
+  <Card title="Try Different Languages" icon="code">
+    Create Python, TypeScript, or Markdown files
+  </Card>
+  <Card title="Use Documentation URLs" icon="link">
+    Include URLs in Quick Edit to teach AI about libraries
+  </Card>
+</CardGroup>
+
+## Tips for Success
+
+<Info>
+**Make suggestions more accurate**: Type at least 2-3 lines before expecting suggestions. The AI needs context to understand your intent.
+</Info>
+
+<Info>
+**Write better prompts**: Be specific in your Quick Edit instructions. Instead of "improve this", try "add input validation and error handling".
+</Info>
+
+<Info>
+**Leverage conversation memory**: The AI remembers your full conversation. Reference previous messages with "like you suggested before".
+</Info>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Suggestions aren't appearing">
+    - Wait 300ms after typing for the debounce delay
+    - Ensure you have at least 2-3 lines of code for context
+    - Check that your cursor is at the end of a line
+  </Accordion>
+  
+  <Accordion title="Quick Edit (Cmd+K) isn't working">
+    - Make sure you've selected code first
+    - Try clicking the "Quick Edit" button in the tooltip instead
+    - Check browser console for errors (F12)
+  </Accordion>
+  
+  <Accordion title="Files aren't saving">
+    - Files auto-save after 500ms of inactivity
+    - Check your network connection
+    - Look for the save indicator in the tab
+  </Accordion>
+  
+  <Accordion title="AI responses are slow">
+    - Claude Sonnet 4 can take 2-5 seconds for complex requests
+    - Try shorter, more focused prompts
+    - Consider using Gemini 2.0 Flash for faster responses (see Installation)
+  </Accordion>
+</AccordionGroup>
+
+## Ready to Self-Host?
+
+If you want to run Polaris on your own infrastructure with custom AI models and unlimited projects, check out the [Installation Guide](/installation).

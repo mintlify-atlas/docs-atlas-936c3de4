@@ -1,0 +1,612 @@
+---
+title: Installation
+description: Self-host Polaris on your infrastructure with complete control over AI models and data
+---
+
+# Self-Hosting Guide
+
+This guide covers installing and running Polaris locally or on your own infrastructure. Perfect for developers who want full control over their IDE environment.
+
+<Warning>
+This is **Part 1** of the Polaris codebase. Part 2 features (AI Agent, WebContainer preview, GitHub integration) are coming soon. The current version is fully functional for code editing and AI assistance.
+</Warning>
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+### System Requirements
+
+- **Node.js**: Version 20.09 or higher
+- **Package Manager**: npm or pnpm
+- **Terminal**: Access to run multiple simultaneous processes
+- **Git**: For cloning the repository
+
+### Required Services
+
+You'll need accounts for these services:
+
+| Service | Purpose | Free Tier | Required |
+|---------|---------|-----------|----------|
+| [Clerk](https://cwa.run/clerk) | Authentication with GitHub OAuth | Yes | ✅ Yes |
+| [Convex](https://cwa.run/convex) | Real-time database | Yes | ✅ Yes |
+| [Inngest](https://cwa.run/inngest) | Background job processing | Yes | ✅ Yes |
+| [Anthropic](https://anthropic.com) | Claude AI API | No | ✅ Yes* |
+| [Google AI Studio](https://aistudio.google.com) | Gemini AI API | Yes | ✅ Yes* |
+| [Firecrawl](https://cwa.run/firecrawl) | Web scraping for docs | Yes | ❌ Optional |
+| [Sentry](https://cwa.run/sentry) | Error tracking | Yes | ❌ Optional |
+
+<Info>
+*You need **either** Anthropic (Claude) **or** Google AI Studio (Gemini), not both. Claude Sonnet 4 is recommended for best results, but Gemini 2.0 Flash works great on the free tier.
+</Info>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the Polaris repository from GitHub:
+    
+    ```bash
+    git clone https://github.com/code-with-antonio/polaris.git
+    cd polaris
+    ```
+    
+    <Info>
+    The repository includes:
+    - Full source code with TypeScript
+    - Convex schema and functions
+    - Pre-configured Next.js setup
+    - shadcn/ui components
+    </Info>
+  </Step>
+  
+  <Step title="Install Dependencies">
+    Install all required npm packages:
+    
+    ```bash
+    npm install
+    ```
+    
+    This installs the complete tech stack:
+    
+    ```json
+    {
+      "dependencies": {
+        "next": "16.1.1",
+        "react": "19.2.3",
+        "@clerk/nextjs": "^6.36.5",
+        "convex": "^1.31.2",
+        "inngest": "^3.49.3",
+        "@ai-sdk/anthropic": "^3.0.1",
+        "@ai-sdk/google": "^3.0.1",
+        "codemirror": "^6.0.2",
+        "@codemirror/lang-javascript": "^6.2.4",
+        "@codemirror/lang-python": "^6.2.1",
+        "@codemirror/theme-one-dark": "^6.1.3"
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Set Up Environment Variables">
+    Create your environment configuration file:
+    
+    ```bash
+    touch .env.local
+    ```
+    
+    Add the following variables:
+    
+    ```bash
+    # Clerk Authentication
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+    CLERK_SECRET_KEY=sk_test_...
+    
+    # Convex Database
+    NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+    CONVEX_DEPLOYMENT=prod:your-deployment
+    POLARIS_CONVEX_INTERNAL_KEY=your-random-secret-key-here
+    
+    # AI Provider (choose ONE)
+    ANTHROPIC_API_KEY=sk-ant-...          # Claude Sonnet 4 (recommended)
+    # OR
+    GOOGLE_GENERATIVE_AI_API_KEY=...     # Gemini 2.0 Flash (free)
+    
+    # Optional Services
+    FIRECRAWL_API_KEY=fc-...              # For scraping docs in Quick Edit
+    SENTRY_DSN=https://...                # For error tracking
+    ```
+    
+    <Warning>
+    **POLARIS_CONVEX_INTERNAL_KEY** should be a long random string. Generate one with:
+    
+    ```bash
+    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+    ```
+    </Warning>
+  </Step>
+  
+  <Step title="Configure Clerk">
+    Set up authentication:
+    
+    1. Create a new application at [clerk.com](https://clerk.com)
+    2. Enable **GitHub OAuth** in Settings → Authentication
+    3. Copy your publishable and secret keys to `.env.local`
+    4. Add your local URL to allowed origins:
+       - Development: `http://localhost:3000`
+    
+    <Info>
+    Clerk handles authentication in the app with protected routes:
+    
+    ```typescript
+    // src/features/auth/
+    import { auth } from "@clerk/nextjs/server";
+    
+    export const requireAuth = async () => {
+      const { userId } = await auth();
+      if (!userId) {
+        throw new Error("Unauthorized");
+      }
+      return userId;
+    };
+    ```
+    </Info>
+  </Step>
+  
+  <Step title="Configure Convex">
+    Set up your real-time database:
+    
+    1. Create a project at [convex.dev](https://convex.dev)
+    2. Copy your deployment URL to `.env.local`
+    3. The database schema includes:
+    
+    ```typescript
+    // convex/schema.ts
+    export default defineSchema({
+      projects: defineTable({
+        name: v.string(),
+        ownerId: v.string(),
+        updatedAt: v.number(),
+        settings: v.optional(
+          v.object({
+            installCommand: v.optional(v.string()),
+            devCommand: v.optional(v.string()),
+          })
+        ),
+      }).index("by_owner", ["ownerId"]),
+      
+      files: defineTable({
+        projectId: v.id("projects"),
+        parentId: v.optional(v.id("files")),
+        name: v.string(),
+        type: v.union(v.literal("file"), v.literal("folder")),
+        content: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
+        updatedAt: v.number(),
+      }),
+      
+      conversations: defineTable({
+        projectId: v.id("projects"),
+        title: v.string(),
+        updatedAt: v.number(),
+      }),
+      
+      messages: defineTable({
+        conversationId: v.id("conversations"),
+        projectId: v.id("projects"),
+        role: v.union(v.literal("user"), v.literal("assistant")),
+        content: v.string(),
+        status: v.optional(
+          v.union(
+            v.literal("processing"),
+            v.literal("completed"),
+            v.literal("cancelled")
+          )
+        ),
+      }),
+    });
+    ```
+  </Step>
+  
+  <Step title="Configure AI Provider">
+    Choose and set up your AI provider:
+    
+    ### Option A: Anthropic Claude (Recommended)
+    
+    Best for production use with superior code understanding:
+    
+    1. Sign up at [anthropic.com](https://anthropic.com)
+    2. Create an API key
+    3. Add to `.env.local`: `ANTHROPIC_API_KEY=sk-ant-...`
+    4. Model used: `claude-3-7-sonnet-20250219`
+    
+    ### Option B: Google Gemini (Free Tier)
+    
+    Perfect for development and learning:
+    
+    1. Visit [aistudio.google.com](https://aistudio.google.com)
+    2. Generate an API key
+    3. Add to `.env.local`: `GOOGLE_GENERATIVE_AI_API_KEY=...`
+    4. Model used: `gemini-2.0-flash-exp`
+    
+    <Info>
+    The AI provider is automatically detected based on which key is present. Anthropic takes priority if both are set.
+    </Info>
+  </Step>
+</Steps>
+
+## Running Polaris
+
+Polaris requires **three** separate processes running simultaneously. Open three terminal windows:
+
+### Terminal 1: Convex Development Server
+
+Starts the real-time database with live reloading:
+
+```bash
+npx convex dev
+```
+
+You should see:
+
+```
+✔ Deployment URL: https://your-deployment.convex.cloud
+✔ Watching for file changes...
+✔ Syncing functions...
+```
+
+<Info>
+The Convex dev server:
+- Syncs your schema and functions automatically
+- Provides a dashboard at the URL shown
+- Hot-reloads on file changes in `convex/`
+</Info>
+
+### Terminal 2: Next.js Development Server
+
+Starts the web application:
+
+```bash
+npm run dev
+```
+
+You should see:
+
+```
+▲ Next.js 16.1.1
+- Local:        http://localhost:3000
+- Environments: .env.local
+
+✓ Ready in 2.3s
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Terminal 3: Inngest Development Server
+
+Starts the background job processor:
+
+```bash
+npx inngest-cli@latest dev
+```
+
+You should see:
+
+```
+✓ Inngest Dev Server running
+✓ Dashboard: http://localhost:8288
+✓ Connected to http://localhost:3000/api/inngest
+```
+
+<Info>
+Inngest handles:
+- Long-running AI conversations
+- GitHub import/export jobs (Part 2)
+- Async file processing
+- Background tasks without blocking the UI
+</Info>
+
+## Verifying Your Installation
+
+<Steps>
+  <Step title="Check Authentication">
+    Visit `http://localhost:3000` and click "Sign in with GitHub". You should be redirected to Clerk's OAuth flow.
+    
+    If this fails, verify:
+    - Clerk keys in `.env.local` are correct
+    - GitHub OAuth is enabled in Clerk dashboard
+    - `http://localhost:3000` is in allowed origins
+  </Step>
+  
+  <Step title="Create a Test Project">
+    After signing in, click "New Project" and enter a prompt. If the project creates successfully, Convex is working.
+    
+    Check the Convex dashboard to see your project record:
+    
+    ```typescript
+    {
+      _id: "...",
+      _creationTime: 1234567890,
+      name: "My Test Project",
+      ownerId: "user_...",
+      updatedAt: 1234567890
+    }
+    ```
+  </Step>
+  
+  <Step title="Test AI Suggestions">
+    Create a new file (e.g., `test.js`) and start typing:
+    
+    ```javascript
+    function calculateSum(
+    ```
+    
+    After 300ms, you should see ghost text suggesting the completion. If suggestions don't appear:
+    
+    - Check browser console for errors (F12)
+    - Verify your AI API key in `.env.local`
+    - Confirm the API key has sufficient credits
+    - Check the Next.js terminal for API errors
+  </Step>
+  
+  <Step title="Test Quick Edit">
+    Select some code and press Cmd+K (or Ctrl+K). Type an instruction like "add comments".
+    
+    The AI should modify your code. If this fails:
+    
+    - Verify `/api/quick-edit` endpoint is responding
+    - Check Inngest dashboard for errors
+    - Look for rate limit errors in terminal
+  </Step>
+</Steps>
+
+## Production Deployment
+
+<Warning>
+Production deployment requires additional configuration beyond this guide's scope. Consider:
+- Environment-specific Convex deployments
+- Clerk production instance
+- Inngest production configuration
+- Proper secret management
+- Custom domain setup
+</Warning>
+
+### Deployment Checklist
+
+<Steps>
+  <Step title="Update Environment Variables">
+    Replace all development keys with production keys:
+    
+    ```bash
+    # Use production Clerk instance
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+    CLERK_SECRET_KEY=sk_live_...
+    
+    # Use production Convex deployment
+    NEXT_PUBLIC_CONVEX_URL=https://prod.convex.cloud
+    CONVEX_DEPLOYMENT=prod:...
+    ```
+  </Step>
+  
+  <Step title="Deploy Convex">
+    Push your Convex functions to production:
+    
+    ```bash
+    npx convex deploy --prod
+    ```
+  </Step>
+  
+  <Step title="Build Next.js">
+    Create an optimized production build:
+    
+    ```bash
+    npm run build
+    ```
+  </Step>
+  
+  <Step title="Deploy to Vercel">
+    Deploy to Vercel (recommended) or your hosting provider:
+    
+    ```bash
+    vercel --prod
+    ```
+    
+    Add all environment variables in Vercel dashboard:
+    - Settings → Environment Variables
+    - Add each variable from `.env.local`
+  </Step>
+  
+  <Step title="Configure Inngest">
+    Update Inngest to point to your production URL:
+    
+    1. Go to [Inngest dashboard](https://app.inngest.com)
+    2. Add your production URL: `https://your-domain.com/api/inngest`
+    3. Verify the webhook connection succeeds
+  </Step>
+</Steps>
+
+## Customization
+
+### Change AI Model
+
+Edit the API routes to use different models:
+
+```typescript
+// src/app/api/quick-edit/route.ts
+import { anthropic } from "@ai-sdk/anthropic";
+
+const { output } = await generateText({
+  model: anthropic("claude-3-7-sonnet-20250219"), // Change this
+  // ...
+});
+```
+
+Supported Anthropic models:
+- `claude-3-7-sonnet-20250219` (recommended)
+- `claude-3-5-sonnet-20241022`
+- `claude-3-opus-20240229`
+
+Supported Google models:
+- `gemini-2.0-flash-exp` (free tier)
+- `gemini-1.5-pro-latest`
+
+### Adjust Suggestion Debounce
+
+Change how quickly suggestions appear:
+
+```typescript
+// src/features/editor/extensions/suggestion/index.ts
+const DEBOUNCE_DELAY = 300; // Change to 500 for slower, 100 for faster
+```
+
+### Customize Editor Theme
+
+Modify the CodeMirror theme:
+
+```typescript
+// src/features/editor/extensions/theme.ts
+import { oneDark } from "@codemirror/theme-one-dark";
+
+export const theme = () => [
+  oneDark, // Replace with your custom theme
+];
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Convex connection errors">
+    **Symptoms**: `Failed to connect to deployment` errors
+    
+    **Solutions**:
+    - Ensure `npx convex dev` is running
+    - Check `NEXT_PUBLIC_CONVEX_URL` matches the terminal output
+    - Verify network connectivity
+    - Try `npx convex dev --once` to resync
+  </Accordion>
+  
+  <Accordion title="Inngest webhook failures">
+    **Symptoms**: Background jobs not processing, conversation messages stuck
+    
+    **Solutions**:
+    - Confirm `npx inngest-cli dev` is running
+    - Check Inngest dashboard at `http://localhost:8288`
+    - Verify Next.js dev server is running on port 3000
+    - Look for errors at `/api/inngest` endpoint
+  </Accordion>
+  
+  <Accordion title="AI API rate limits">
+    **Symptoms**: "Rate limit exceeded" errors
+    
+    **Solutions**:
+    - Check your API provider's dashboard for limits
+    - Add billing information to increase limits
+    - Switch to Google Gemini for unlimited free tier
+    - Increase `DEBOUNCE_DELAY` to reduce requests
+  </Accordion>
+  
+  <Accordion title="Authentication redirects fail">
+    **Symptoms**: Infinite redirect loops, 401 errors
+    
+    **Solutions**:
+    - Clear browser cookies for `localhost:3000`
+    - Verify Clerk environment variables
+    - Check Clerk dashboard for error logs
+    - Ensure GitHub OAuth app is approved
+  </Accordion>
+  
+  <Accordion title="File upload/storage errors">
+    **Symptoms**: Binary files fail to upload
+    
+    **Solutions**:
+    - Files under 5MB are stored in Convex directly
+    - Larger files use Convex Storage (check quota)
+    - Binary detection uses `isbinaryfile` package
+    - Check Convex dashboard → Files tab
+  </Accordion>
+</AccordionGroup>
+
+## Project Structure
+
+Understanding the codebase:
+
+```
+polaris/
+├── src/
+│   ├── app/                      # Next.js App Router
+│   │   ├── api/                 # API routes
+│   │   │   ├── suggestion/      # AI completions endpoint
+│   │   │   ├── quick-edit/      # Cmd+K editing endpoint
+│   │   │   └── messages/        # Conversation API
+│   │   ├── projects/            # Project pages
+│   │   └── page.tsx             # Landing page
+│   ├── features/
+│   │   ├── editor/              # CodeMirror setup
+│   │   │   ├── extensions/      # Custom extensions
+│   │   │   │   ├── suggestion/  # Ghost text completions
+│   │   │   │   ├── selection-tooltip.ts  # Cmd+K UI
+│   │   │   │   └── quick-edit/  # Inline editing
+│   │   │   └── hooks/           # useEditor hook
+│   │   ├── conversations/       # AI chat sidebar
+│   │   ├── projects/            # Project management
+│   │   │   ├── components/      # File explorer, navbar
+│   │   │   └── hooks/           # useProjects, useFiles
+│   │   └── auth/                # Clerk integration
+│   ├── components/
+│   │   ├── ui/                  # shadcn/ui components
+│   │   └── ai-elements/         # AI-specific UI
+│   ├── inngest/
+│   │   ├── client.ts            # Inngest setup
+│   │   └── functions.ts         # Background jobs
+│   └── lib/
+│       ├── utils.ts             # Helper functions
+│       ├── convex-client.ts     # Convex client
+│       └── firecrawl.ts         # Doc scraping
+├── convex/
+│   ├── schema.ts                # Database schema
+│   ├── projects.ts              # Project queries/mutations
+│   ├── files.ts                 # File operations
+│   ├── conversations.ts         # Conversation CRUD
+│   └── system.ts                # Internal API for Inngest
+├── public/                      # Static assets
+├── .env.local                   # Environment variables (you create this)
+├── package.json                 # Dependencies
+└── next.config.ts               # Next.js configuration
+```
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="YouTube Tutorial" icon="youtube" href="https://youtu.be/Xf9rHPNBMyQ">
+    Watch the full tutorial series building Polaris
+  </Card>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/code-with-antonio/polaris">
+    Source code, issues, and discussions
+  </Card>
+  <Card title="Convex Docs" icon="database" href="https://docs.convex.dev">
+    Learn about the real-time database
+  </Card>
+  <Card title="CodeMirror Guide" icon="code" href="https://codemirror.net/docs/">
+    Customize the editor with extensions
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you encounter issues:
+
+1. Check the [GitHub Issues](https://github.com/code-with-antonio/polaris/issues)
+2. Review the [YouTube tutorial](https://youtu.be/Xf9rHPNBMyQ) for visual walkthrough
+3. Ask in GitHub Discussions
+4. Verify all three processes (Convex, Next.js, Inngest) are running
+
+## What's Next?
+
+<Info>
+**Part 2 Coming Soon**: The next tutorial chapter will add:
+- AI Agent with file modification tools
+- WebContainer for in-browser code execution
+- Terminal integration with xterm.js
+- GitHub repository import/export
+- AI-powered project generation from prompts
+</Info>

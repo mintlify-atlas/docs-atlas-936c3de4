@@ -1,0 +1,194 @@
+---
+title: Code Editor
+description: A powerful CodeMirror 6-based editor with AI-powered features and language support
+---
+
+Polaris features a modern code editor built on CodeMirror 6, providing a seamless coding experience with intelligent features, syntax highlighting, and AI-powered assistance.
+
+## Editor Features
+
+### Syntax Highlighting
+
+The editor automatically detects file types and provides syntax highlighting for multiple languages:
+
+- JavaScript (.js)
+- TypeScript (.ts)
+- React (.jsx, .tsx)
+- HTML (.html)
+- CSS (.css)
+- JSON (.json)
+- Markdown (.md, .mdx)
+- Python (.py)
+
+### Core Editing Features
+
+<AccordionGroup>
+  <Accordion title="Line Numbers & Gutters">
+    - Line numbers displayed on the left
+    - Active line highlighting with gutter indicator
+    - Code folding gutter with expand/collapse icons
+    - Click line numbers to select lines
+  </Accordion>
+
+  <Accordion title="Selection & Cursor">
+    - Multiple cursor support for simultaneous editing
+    - Rectangular selection mode for block editing
+    - Crosshair cursor for precise selections
+    - Selection match highlighting shows all occurrences
+  </Accordion>
+
+  <Accordion title="Bracket Management">
+    - Auto-closing brackets, quotes, and parentheses
+    - Bracket matching highlights corresponding pairs
+    - Automatic indentation on new lines
+    - Indentation markers for visual structure
+  </Accordion>
+</AccordionGroup>
+
+### Code Intelligence
+
+#### Autocompletion
+
+The editor includes built-in autocompletion:
+
+- Context-aware suggestions
+- Trigger with `Ctrl+Space`
+- Navigate suggestions with arrow keys
+- Accept with `Enter`
+
+#### Code Folding
+
+Collapse and expand code blocks for better navigation:
+
+<Steps>
+  <Step title="Locate the fold gutter">
+    Look for chevron icons in the left gutter next to collapsible code blocks
+  </Step>
+  
+  <Step title="Click to fold">
+    Click the chevron to collapse the code block
+  </Step>
+  
+  <Step title="Keyboard shortcuts">
+    Use `Ctrl+Shift+[` to fold and `Ctrl+Shift+]` to unfold
+  </Step>
+</Steps>
+
+## AI-Powered Features
+
+### AI Code Suggestions
+
+Polaris provides intelligent code suggestions as you type:
+
+<Note>
+  Suggestions appear automatically after a brief pause in typing (300ms debounce). They display as ghost text at your cursor position.
+</Note>
+
+**How it works:**
+
+1. Type your code normally
+2. Wait briefly - AI analyzes context from:
+   - Current line and cursor position
+   - Previous 5 lines
+   - Next 5 lines
+   - Full file content
+3. Suggestion appears as ghost text (40% opacity)
+4. Press `Tab` to accept the suggestion
+
+<Tip>
+  Suggestions are context-aware and consider your current line, surrounding code, and file type to provide relevant completions.
+</Tip>
+
+### Quick Edit
+
+Edit selected code using natural language instructions:
+
+<Steps>
+  <Step title="Select code">
+    Highlight the code you want to modify
+  </Step>
+  
+  <Step title="Open Quick Edit">
+    - Press `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux)
+    - Or click "Quick Edit" in the selection tooltip
+  </Step>
+  
+  <Step title="Describe your changes">
+    Enter a natural language instruction like:
+    - "Add error handling"
+    - "Convert to async/await"
+    - "Add comments explaining the logic"
+  </Step>
+  
+  <Step title="Apply changes">
+    Click Submit and the AI will rewrite your selected code
+  </Step>
+</Steps>
+
+### Selection Toolbar
+
+When you select code, a toolbar appears with quick actions:
+
+- **Add to Chat** - Send selected code to the AI assistant for discussion
+- **Quick Edit** (`⌘K`) - Modify code with natural language
+
+<Note>
+  The toolbar automatically positions itself near your selection for easy access.
+</Note>
+
+## Editor Navigation
+
+### Tab Management
+
+Manage multiple open files efficiently:
+
+- **Single-click** a file in the explorer opens it as a preview (italicized tab name)
+- **Double-click** pins the file (normal tab name)
+- **Close tabs** with the X button or by clicking another preview file
+- Tabs show file type icons for quick identification
+
+### Minimap
+
+The editor includes a minimap on the right side providing:
+
+- Overview of entire file content
+- Visual navigation for long files
+- Current viewport indicator
+
+## Keyboard Shortcuts
+
+### Editing
+
+| Shortcut | Action |
+|----------|--------|
+| `Tab` | Accept AI suggestion or indent |
+| `Cmd/Ctrl+K` | Quick Edit selected code |
+| `Ctrl+Space` | Trigger autocompletion |
+| `Cmd/Ctrl+/` | Toggle line comment |
+| `Tab` (with selection) | Indent selection |
+| `Shift+Tab` | Outdent selection |
+
+### Navigation
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl+F` | Find in file |
+| `Cmd/Ctrl+H` | Find and replace |
+| `Ctrl+Shift+[` | Fold code block |
+| `Ctrl+Shift+]` | Unfold code block |
+
+### History
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl+Z` | Undo |
+| `Cmd/Ctrl+Shift+Z` | Redo |
+
+## Theme
+
+The editor uses a custom dark theme based on One Dark, with:
+
+- Syntax highlighting optimized for readability
+- Consistent color scheme across file types
+- Comfortable contrast ratios
+- Custom gutter and selection colors

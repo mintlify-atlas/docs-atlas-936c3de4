@@ -1,0 +1,566 @@
+---
+title: Editor Extensions
+description: Building custom CodeMirror 6 extensions for the Polaris editor
+---
+
+Polaris uses CodeMirror 6 as its core editor, enhanced with custom extensions for AI features, language support, and UI interactions. This guide explains how extensions work and how to create your own.
+
+## Extension Architecture
+
+CodeMirror 6 extensions are composable pieces that add functionality to the editor. Polaris combines built-in extensions with custom ones:
+
+```typescript
+import { EditorView } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
+
+const state = EditorState.create({
+  doc: content,
+  extensions: [
+    customSetup,              // Built-in features
+    getLanguageExtension(filename),  // Syntax highlighting
+    customTheme,             // Styling
+    minimap(),              // Overview sidebar
+    suggestion(filename),   // AI suggestions
+    quickEdit(filename),    // Cmd+K editing
+    selectionTooltip(),     // Selection actions
+  ],
+});
+```
+
+## Core Extensions
+
+### Custom Setup (`custom-setup.ts`)
+
+Bundles essential CodeMirror features:
+
+```typescript
+import {
+  keymap,
+  highlightSpecialChars,
+  drawSelection,
+  highlightActiveLine,
+  dropCursor,
+  rectangularSelection,
+  crosshairCursor,
+  lineNumbers,
+  highlightActiveLineGutter,
+} from "@codemirror/view";
+import { Extension, EditorState } from "@codemirror/state";
+import {
+  defaultHighlightStyle,
+  syntaxHighlighting,
+  indentOnInput,
+  bracketMatching,
+  foldGutter,
+  foldKeymap,
+} from "@codemirror/language";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import {
+  autocompletion,
+  completionKeymap,
+  closeBrackets,
+  closeBracketsKeymap,
+} from "@codemirror/autocomplete";
+
+export const customSetup: Extension = (() => [
+  lineNumbers(),
+  highlightActiveLineGutter(),
+  highlightSpecialChars(),
+  history(),
+  foldGutter({
+    markerDOM(open) {
+      const icon = document.createElement("div");
+      icon.className =
+        "flex items-center justify-center size-4 cursor-pointer pt-0.5";
+      icon.innerHTML = open ? foldGutterOpenSvg : foldGutterClosedSvg;
+      return icon;
+    },
+  }),
+  drawSelection(),
+  dropCursor(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  bracketMatching(),
+  closeBrackets(),
+  autocompletion(),
+  rectangularSelection(),
+  crosshairCursor(),
+  highlightActiveLine(),
+  highlightSelectionMatches(),
+  keymap.of([
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...searchKeymap,
+    ...historyKeymap,
+    ...foldKeymap,
+    ...completionKeymap,
+    ...lintKeymap,
+  ]),
+])();
+```
+
+<Note>
+The custom fold gutter uses SVG icons from Lucide for a consistent UI look.
+</Note>
+
+### Language Extension (`language-extension.ts`)
+
+Provides syntax highlighting based on file extension:
+
+```typescript
+import { Extension } from "@codemirror/state";
+import { javascript } from "@codemirror/lang-javascript";
+import { html } from "@codemirror/lang-html";
+import { css } from "@codemirror/lang-css";
+import { json } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
+import { python } from "@codemirror/lang-python";
+
+export const getLanguageExtension = (filename: string): Extension => {
+  const ext = filename.split(".").pop()?.toLowerCase();
+
+  switch(ext) {
+    case "js":
+      return javascript();
+    case "jsx":
+      return javascript({ jsx: true });
+    case "ts":
+      return javascript({ typescript: true });
+    case "tsx":
+      return javascript({ typescript: true, jsx: true });
+    case "html":
+      return html();
+    case "css":
+      return css();
+    case "json":
+      return json();
+    case "md":
+    case "mdx":
+      return markdown();
+    case "py":
+      return python();
+    default:
+      return [];
+  }
+};
+```
+
+### Custom Theme (`theme.ts`)
+
+Styles the editor to match Polaris design:
+
+```typescript
+import { EditorView } from "@codemirror/view";
+
+export const customTheme = EditorView.theme({
+  "&": {
+    outline: "none !important",
+    height: "100%",
+  },
+  ".cm-content": {
+    fontFamily: "var(--font-plex-mono), monospace",
+    fontSize: "14px",
+  },
+  ".cm-scroller": {
+    scrollbarWidth: "thin",
+    scrollbarColor: "#3f3f46 transparent",
+  },
+});
+```
+
+## AI-Powered Extensions
+
+### Suggestion Extension (`suggestion/index.ts`)
+
+Provides ghost text suggestions as you type:
+
+<CodeGroup>
+```typescript State Management
+import { StateEffect, StateField } from "@codemirror/state";
+
+// Define an effect to update suggestion text
+const setSuggestionEffect = StateEffect.define<string | null>();
+
+// Store the current suggestion in editor state
+const suggestionState = StateField.define<string | null>({
+  create() {
+    return null;
+  },
+  update(value, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(setSuggestionEffect)) {
+        return effect.value;
+      }
+    }
+    return value;
+  },
+});
+```
+
+```typescript Widget Rendering
+import { WidgetType } from "@codemirror/view";
+
+// Create a custom DOM element for suggestion display
+class SuggestionWidget extends WidgetType {
+  constructor(readonly text: string) {
+    super();
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.textContent = this.text;
+    span.style.opacity = "0.4"; // Ghost text appearance
+    span.style.pointerEvents = "none";
+    return span;
+  }
+}
+```
+
+```typescript Debounced Fetching
+const createDebouncePlugin = (fileName: string) => {
+  return ViewPlugin.fromClass(
+    class {
+      constructor(view: EditorView) {
+        this.triggerSuggestion(view);
+      }
+
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.selectionSet) {
+          this.triggerSuggestion(update.view);
+        }
+      }
+
+      triggerSuggestion(view: EditorView) {
+        if (debounceTimer !== null) {
+          clearTimeout(debounceTimer);
+        }
+
+        debounceTimer = window.setTimeout(async () => {
+          const payload = generatePayload(view, fileName);
+          const suggestion = await fetcher(payload, signal);
+          
+          view.dispatch({
+            effects: setSuggestionEffect.of(suggestion),
+          });
+        }, 300);
+      }
+    }
+  );
+};
+```
+
+```typescript Tab Acceptance
+const acceptSuggestionKeymap = keymap.of([{
+  key: "Tab",
+  run: (view) => {
+    const suggestion = view.state.field(suggestionState);
+    if (!suggestion) return false;
+
+    const cursor = view.state.selection.main.head;
+    view.dispatch({
+      changes: { from: cursor, insert: suggestion },
+      selection: { anchor: cursor + suggestion.length },
+      effects: setSuggestionEffect.of(null),
+    });
+    return true;
+  },
+}]);
+```
+</CodeGroup>
+
+<Tip>
+The suggestion extension sends context to `/api/suggestion` including the current line, 5 lines before/after, and cursor position.
+</Tip>
+
+### Quick Edit Extension (`quick-edit/index.ts`)
+
+Enables Cmd+K to edit selected code with natural language:
+
+<CodeGroup>
+```typescript State & Effects
+import { StateEffect, StateField } from "@codemirror/state";
+
+export const showQuickEditEffect = StateEffect.define<boolean>();
+
+export const quickEditState = StateField.define<boolean>({
+  create() {
+    return false;
+  },
+  update(value, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(showQuickEditEffect)) {
+        return effect.value;
+      }
+    }
+    // Close if selection becomes empty
+    if (transaction.selection) {
+      const selection = transaction.state.selection.main;
+      if (selection.empty) return false;
+    }
+    return value;
+  }
+});
+```
+
+```typescript Tooltip UI
+const createQuickEditTooltip = (state: EditorState): readonly Tooltip[] => {
+  const selection = state.selection.main;
+  if (selection.empty || !state.field(quickEditState)) {
+    return [];
+  }
+
+  return [{
+    pos: selection.to,
+    above: false,
+    create() {
+      const dom = document.createElement("div");
+      const input = document.createElement("input");
+      input.placeholder = "Edit selected code";
+      
+      const form = document.createElement("form");
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const editedCode = await fetcher({
+          selectedCode: view.state.doc.sliceString(
+            selection.from, selection.to
+          ),
+          fullCode: view.state.doc.toString(),
+          instruction: input.value.trim(),
+        });
+        
+        view.dispatch({
+          changes: {
+            from: selection.from,
+            to: selection.to,
+            insert: editedCode,
+          },
+        });
+      };
+      
+      return { dom };
+    },
+  }];
+};
+```
+
+```typescript Keyboard Shortcut
+const quickEditKeymap = keymap.of([{
+  key: "Mod-k",
+  run: (view) => {
+    const selection = view.state.selection.main;
+    if (selection.empty) return false;
+
+    view.dispatch({
+      effects: showQuickEditEffect.of(true),
+    });
+    return true;
+  },
+}]);
+```
+</CodeGroup>
+
+### Selection Tooltip (`selection-tooltip.ts`)
+
+Shows action buttons when text is selected:
+
+```typescript
+import { Tooltip, showTooltip } from "@codemirror/view";
+import { StateField } from "@codemirror/state";
+
+const createTooltipForSelection = (state: EditorState): readonly Tooltip[] => {
+  const selection = state.selection.main;
+  if (selection.empty) return [];
+
+  // Don't show if quick edit is active
+  const isQuickEditActive = state.field(quickEditState);
+  if (isQuickEditActive) return [];
+
+  return [{
+    pos: selection.to,
+    above: false,
+    create() {
+      const dom = document.createElement("div");
+      dom.className = "bg-popover border shadow-md flex gap-2";
+
+      const addToChatButton = document.createElement("button");
+      addToChatButton.textContent = "Add to Chat";
+
+      const quickEditButton = document.createElement("button");
+      quickEditButton.textContent = "Quick Edit";
+      quickEditButton.onclick = () => {
+        editorView.dispatch({
+          effects: showQuickEditEffect.of(true),
+        });
+      };
+
+      dom.appendChild(addToChatButton);
+      dom.appendChild(quickEditButton);
+      return { dom };
+    },
+  }];
+};
+
+const selectionTooltipField = StateField.define<readonly Tooltip[]>({
+  create(state) {
+    return createTooltipForSelection(state);
+  },
+  update(tooltips, transaction) {
+    if (transaction.docChanged || transaction.selection) {
+      return createTooltipForSelection(transaction.state);
+    }
+    return tooltips;
+  },
+  provide: (field) => showTooltip.computeN(
+    [field],
+    (state) => state.field(field)
+  ),
+});
+```
+
+## Creating Custom Extensions
+
+Here's a template for creating your own extension:
+
+```typescript
+import { Extension } from "@codemirror/state";
+import { ViewPlugin, EditorView, Decoration } from "@codemirror/view";
+
+export const myExtension = (): Extension => {
+  // 1. Create a ViewPlugin for editor interactions
+  const plugin = ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+
+      constructor(view: EditorView) {
+        this.decorations = Decoration.none;
+      }
+
+      update(update: ViewUpdate) {
+        // React to document changes
+        if (update.docChanged) {
+          // Update decorations or trigger actions
+        }
+      }
+
+      destroy() {
+        // Cleanup
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+    }
+  );
+
+  // 2. Define keybindings
+  const keymaps = keymap.of([{
+    key: "Ctrl-Space",
+    run: (view) => {
+      // Handle key press
+      return true; // Prevent default
+    },
+  }]);
+
+  // 3. Return array of extensions
+  return [plugin, keymaps];
+};
+```
+
+## Extension Concepts
+
+<Accordion title="StateField - Managing State">
+StateFields store data in the editor state and update via transactions:
+
+```typescript
+const myState = StateField.define<MyData>({
+  create() {
+    return initialValue;
+  },
+  update(value, transaction) {
+    // Return new value or keep current
+    return value;
+  },
+});
+```
+</Accordion>
+
+<Accordion title="StateEffect - Triggering Updates">
+Effects are messages that modify state:
+
+```typescript
+const myEffect = StateEffect.define<string>();
+
+// Dispatch an effect
+view.dispatch({
+  effects: myEffect.of("new value"),
+});
+
+// Handle in StateField.update
+for (const effect of transaction.effects) {
+  if (effect.is(myEffect)) {
+    return effect.value;
+  }
+}
+```
+</Accordion>
+
+<Accordion title="Decorations - Visual Elements">
+Decorations add visual elements without changing document content:
+
+```typescript
+import { Decoration, DecorationSet } from "@codemirror/view";
+
+// Add a widget at cursor
+const decoration = Decoration.widget({
+  widget: new MyWidget(),
+  side: 1,
+}).range(cursorPos);
+
+return Decoration.set([decoration]);
+```
+</Accordion>
+
+<Accordion title="ViewPlugin - Side Effects">
+ViewPlugins react to editor changes and manage side effects:
+
+```typescript
+ViewPlugin.fromClass(class {
+  constructor(view: EditorView) {
+    // Initialize
+  }
+
+  update(update: ViewUpdate) {
+    // React to changes
+  }
+
+  destroy() {
+    // Cleanup timers, listeners, etc.
+  }
+});
+```
+</Accordion>
+
+<Note>
+All extensions in `src/features/editor/extensions/` are imported and applied in the main editor component at `src/features/editor/components/code-editor.tsx`.
+</Note>
+
+## Testing Extensions
+
+Test extensions by importing them in the editor component:
+
+```typescript
+import { myExtension } from "../extensions/my-extension";
+
+const state = EditorState.create({
+  doc: content,
+  extensions: [
+    // ... other extensions
+    myExtension(),
+  ],
+});
+```
+
+<Tip>
+Use the browser DevTools to inspect StateFields: `view.state.field(myState)`
+</Tip>

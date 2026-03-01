@@ -1,0 +1,185 @@
+---
+title: 'Conversations Schema'
+description: 'Conversations table schema and queries'
+---
+
+## Schema Definition
+
+The `conversations` table stores AI chat conversations within projects.
+
+### Fields
+
+<ResponseField name="_id" type="Id<'conversations'>" required>
+  Unique conversation identifier
+</ResponseField>
+
+<ResponseField name="projectId" type="Id<'projects'>" required>
+  ID of the project this conversation belongs to
+</ResponseField>
+
+<ResponseField name="title" type="string" required>
+  Conversation title (typically auto-generated based on first message)
+</ResponseField>
+
+<ResponseField name="updatedAt" type="number" required>
+  Unix timestamp (in milliseconds) of last update
+</ResponseField>
+
+### Indexes
+
+<ResponseField name="by_project" type="index">
+  Index on `projectId` for retrieving all conversations in a project
+  
+  **Fields:** `["projectId"]`
+</ResponseField>
+
+## Queries
+
+### getById
+
+Retrieve a specific conversation by ID.
+
+<ParamField path="id" type="Id<'conversations'>" required>
+  Conversation identifier
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function ConversationHeader({ conversationId }) {
+  const conversation = useQuery(api.conversations.getById, { 
+    id: conversationId 
+  });
+  return <h1>{conversation?.title}</h1>;
+}
+```
+
+**Returns:** Conversation object
+
+**Errors:**
+- `"Conversation not found"` - Conversation doesn't exist
+- `"Project not found"` - Associated project doesn't exist
+- `"Unauthorized to access this project"` - User is not the project owner
+
+### getByProject
+
+Retrieve all conversations in a project.
+
+<ParamField path="projectId" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function ConversationList({ projectId }) {
+  const conversations = useQuery(api.conversations.getByProject, { 
+    projectId 
+  });
+  
+  return (
+    <div>
+      {conversations?.map(conv => (
+        <div key={conv._id}>
+          <h3>{conv.title}</h3>
+          <small>{new Date(conv.updatedAt).toLocaleDateString()}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**Returns:** Array of conversations, ordered by most recent first
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized to access this project"` - User is not the owner
+
+### getMessages
+
+Retrieve all messages in a conversation.
+
+<ParamField path="conversationId" type="Id<'conversations'>" required>
+  Conversation identifier
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function ChatThread({ conversationId }) {
+  const messages = useQuery(api.conversations.getMessages, { 
+    conversationId 
+  });
+  
+  return (
+    <div>
+      {messages?.map(msg => (
+        <div key={msg._id} className={msg.role}>
+          {msg.content}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**Returns:** Array of messages in chronological order (oldest first)
+
+**Errors:**
+- `"Conversation not found"` - Conversation doesn't exist
+- `"Project not found"` - Associated project doesn't exist
+- `"Unauthorized to access this project"` - User is not the project owner
+
+## Mutations
+
+### create
+
+Create a new conversation in a project.
+
+<ParamField path="projectId" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Conversation title
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function NewConversation({ projectId }) {
+  const createConversation = useMutation(api.conversations.create);
+  
+  const handleCreate = async () => {
+    const conversationId = await createConversation({
+      projectId,
+      title: "New Chat"
+    });
+    console.log("Created conversation:", conversationId);
+  };
+  
+  return <button onClick={handleCreate}>New Chat</button>;
+}
+```
+
+**Returns:** `Id<'conversations'>` - ID of the newly created conversation
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized to access this project"` - User is not the project owner
+
+## Related Tables
+
+<Card title="Messages" icon="message" href="/api/schema/messages">
+  Each conversation contains multiple messages. See the Messages schema for details.
+</Card>
+
+## Source Reference
+
+- Schema definition: `convex/schema.ts:46-50`
+- Queries and mutations: `convex/conversations.ts`

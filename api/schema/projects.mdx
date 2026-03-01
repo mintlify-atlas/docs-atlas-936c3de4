@@ -1,0 +1,249 @@
+---
+title: 'Projects Schema'
+description: 'Projects table schema, queries, and mutations'
+---
+
+## Schema Definition
+
+The `projects` table stores information about code projects in Polaris.
+
+### Fields
+
+<ResponseField name="_id" type="Id<'projects'>" required>
+  Unique project identifier
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Project name
+</ResponseField>
+
+<ResponseField name="ownerId" type="string" required>
+  User ID of the project owner
+</ResponseField>
+
+<ResponseField name="updatedAt" type="number" required>
+  Unix timestamp (in milliseconds) of last update
+</ResponseField>
+
+<ResponseField name="importStatus" type="string">
+  Status of project import operation
+  
+  <Expandable title="Possible values">
+    - `"importing"` - Import in progress
+    - `"completed"` - Import completed successfully
+    - `"failed"` - Import failed
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="exportStatus" type="string">
+  Status of project export operation
+  
+  <Expandable title="Possible values">
+    - `"exporting"` - Export in progress
+    - `"completed"` - Export completed successfully
+    - `"failed"` - Export failed
+    - `"cancelled"` - Export cancelled
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="exportRepoUrl" type="string">
+  URL of the exported repository (set after successful export)
+</ResponseField>
+
+<ResponseField name="settings" type="object">
+  Project configuration settings
+  
+  <Expandable title="properties">
+    <ResponseField name="installCommand" type="string">
+      Custom install command (e.g., `npm install`, `yarn install`)
+    </ResponseField>
+    
+    <ResponseField name="devCommand" type="string">
+      Custom dev server command (e.g., `npm run dev`, `yarn dev`)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Indexes
+
+<ResponseField name="by_owner" type="index">
+  Index on `ownerId` field for efficient user project queries
+  
+  **Fields:** `["ownerId"]`
+</ResponseField>
+
+## Queries
+
+### get
+
+Retrieve all projects owned by the authenticated user.
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function MyProjects() {
+  const projects = useQuery(api.projects.get);
+  return projects?.map(p => <div key={p._id}>{p.name}</div>);
+}
+```
+
+**Returns:** Array of all user's projects, ordered by most recent first
+
+### getPartial
+
+Retrieve a limited number of projects owned by the authenticated user.
+
+<ParamField path="limit" type="number" required>
+  Maximum number of projects to return
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function RecentProjects() {
+  const projects = useQuery(api.projects.getPartial, { limit: 5 });
+  return projects?.map(p => <div key={p._id}>{p.name}</div>);
+}
+```
+
+**Returns:** Array of projects (up to `limit`), ordered by most recent first
+
+### getById
+
+Retrieve a specific project by ID.
+
+<ParamField path="id" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function ProjectDetails({ projectId }) {
+  const project = useQuery(api.projects.getById, { id: projectId });
+  return <h1>{project?.name}</h1>;
+}
+```
+
+**Returns:** Project object
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized access to this project"` - User is not the owner
+
+## Mutations
+
+### create
+
+Create a new project.
+
+<ParamField path="name" type="string" required>
+  Name for the new project
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function CreateProject() {
+  const createProject = useMutation(api.projects.create);
+  
+  const handleCreate = async () => {
+    const projectId = await createProject({ name: "My New Project" });
+    console.log("Created project:", projectId);
+  };
+  
+  return <button onClick={handleCreate}>Create Project</button>;
+}
+```
+
+**Returns:** `Id<'projects'>` - ID of the newly created project
+
+### rename
+
+Rename an existing project.
+
+<ParamField path="id" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  New name for the project
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function RenameProject({ projectId }) {
+  const renameProject = useMutation(api.projects.rename);
+  
+  const handleRename = async () => {
+    await renameProject({ 
+      id: projectId, 
+      name: "Updated Project Name" 
+    });
+  };
+  
+  return <button onClick={handleRename}>Rename</button>;
+}
+```
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized access to this project"` - User is not the owner
+
+### updateSettings
+
+Update project configuration settings.
+
+<ParamField path="id" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+<ParamField path="settings" type="object" required>
+  Project settings object
+  
+  <Expandable title="properties">
+    <ParamField path="installCommand" type="string">
+      Custom install command
+    </ParamField>
+    
+    <ParamField path="devCommand" type="string">
+      Custom dev server command
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function ProjectSettings({ projectId }) {
+  const updateSettings = useMutation(api.projects.updateSettings);
+  
+  const handleUpdate = async () => {
+    await updateSettings({
+      id: projectId,
+      settings: {
+        installCommand: "npm install",
+        devCommand: "npm run dev"
+      }
+    });
+  };
+  
+  return <button onClick={handleUpdate}>Save Settings</button>;
+}
+```
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized to update this project"` - User is not the owner
+
+## Source Reference
+
+- Schema definition: `convex/schema.ts:5-31`
+- Queries and mutations: `convex/projects.ts`

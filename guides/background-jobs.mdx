@@ -1,0 +1,635 @@
+---
+title: Background Jobs
+description: Using Inngest for reliable background job processing in Polaris
+---
+
+Polaris uses [Inngest](https://inngest.com) to handle long-running operations like AI processing, GitHub imports, and exports. This keeps the UI responsive while complex tasks run in the background.
+
+## Why Inngest?
+
+Inngest provides:
+
+- **Non-blocking UI**: Long operations run outside the request-response cycle
+- **Retries**: Automatic retry with exponential backoff on failures
+- **Steps**: Break jobs into resumable steps that don't re-run on retry
+- **Cancellation**: Cancel running jobs (e.g., stop AI generation)
+- **Monitoring**: Built-in dashboard to track job status
+- **Type Safety**: Full TypeScript support
+
+## Setup
+
+### Inngest Client (`src/inngest/client.ts`)
+
+```typescript
+import { Inngest } from "inngest";
+import { sentryMiddleware } from "@inngest/middleware-sentry";
+
+export const inngest = new Inngest({ 
+  id: "polaris",
+  middleware: [sentryMiddleware()],
+});
+```
+
+<Note>
+The Sentry middleware automatically captures errors from Inngest functions and sends them to Sentry for monitoring.
+</Note>
+
+### Function Registry (`src/inngest/functions.ts`)
+
+All Inngest functions must be exported here:
+
+```typescript
+import { inngest } from "./client";
+import { importGithubRepo } from "@/features/projects/inngest/import-github-repo";
+import { exportToGithub } from "@/features/projects/inngest/export-to-github";
+import { processMessage } from "@/features/conversations/inngest/process-message";
+
+export const functions = [
+  importGithubRepo,
+  exportToGithub,
+  processMessage,
+];
+```
+
+### API Endpoint (`src/app/api/inngest/route.ts`)
+
+Inngest needs an HTTP endpoint to invoke functions:
+
+```typescript
+import { serve } from "inngest/next";
+import { inngest } from "@/inngest/client";
+import { functions } from "@/inngest/functions";
+
+export const { GET, POST, PUT } = serve({
+  client: inngest,
+  functions,
+});
+```
+
+## Job Patterns
+
+### Basic Job Structure
+
+```typescript
+import { inngest } from "@/inngest/client";
+
+export const myJob = inngest.createFunction(
+  {
+    id: "my-job",           // Unique identifier
+    onFailure: async ({ event, step }) => {
+      // Handle failures (optional)
+    },
+  },
+  { event: "my/event" },    // Event trigger
+  async ({ event, step }) => {
+    // Job implementation
+    const data = event.data;
+    
+    const result = await step.run("step-name", async () => {
+      // Step logic
+      return value;
+    });
+    
+    return { success: true };
+  }
+);
+```
+
+### Triggering Jobs
+
+From a Next.js API route or server action:
+
+```typescript
+import { inngest } from "@/inngest/client";
+
+await inngest.send({
+  name: "my/event",
+  data: {
+    userId: "user_123",
+    input: "some data",
+  },
+});
+```
+
+## Real-World Examples
+
+### GitHub Import Job
+
+Imports a repository into a Polaris project:
+
+<CodeGroup>
+```typescript Function Definition
+import { inngest } from "@/inngest/client";
+import { Octokit } from "octokit";
+import { NonRetriableError } from "inngest";
+
+export const importGithubRepo = inngest.createFunction(
+  {
+    id: "import-github-repo",
+    onFailure: async ({ event, step }) => {
+      const { projectId } = event.data.event.data;
+      
+      await step.run("set-failed-status", async () => {
+        await convex.mutation(api.system.updateImportStatus, {
+          internalKey: process.env.POLARIS_CONVEX_INTERNAL_KEY,
+          projectId,
+          status: "failed",
+        });
+      });
+    },
+  },
+  { event: "github/import.repo" },
+  async ({ event, step }) => {
+    const { owner, repo, projectId, githubToken } = event.data;
+    
+    const internalKey = process.env.POLARIS_CONVEX_INTERNAL_KEY;
+    if (!internalKey) {
+      throw new NonRetriableError("POLARIS_CONVEX_INTERNAL_KEY not configured");
+    }
+    
+    // Continue with import...
+  }
+);
+```
+
+```typescript Cleanup Step
+// Remove existing files before import
+await step.run("cleanup-project", async () => {
+  await convex.mutation(api.system.cleanup, { 
+    internalKey,
+    projectId
+  });
+});
+```
+
+```typescript Fetch Repository Tree
+const tree = await step.run("fetch-repo-tree", async () => {
+  const octokit = new Octokit({ auth: githubToken });
+  
+  try {
+    const { data } = await octokit.rest.git.getTree({
+      owner,
+      repo,
+      tree_sha: "main",
+      recursive: "1",
+    });
+    return data;
+  } catch {
+    // Fallback to master branch
+    const { data } = await octokit.rest.git.getTree({
+      owner,
+      repo,
+      tree_sha: "master",
+      recursive: "1",
+    });
+    return data;
+  }
+});
+```
+
+```typescript Create Folders
+// Sort folders by depth (parents before children)
+const folders = tree.tree
+  .filter((item) => item.type === "tree")
+  .sort((a, b) => {
+    const aDepth = a.path.split("/").length;
+    const bDepth = b.path.split("/").length;
+    return aDepth - bDepth;
+  });
+
+const folderIdMap = await step.run("create-folders", async () => {
+  const map: Record<string, Id<"files">> = {};
+
+  for (const folder of folders) {
+    const pathParts = folder.path.split("/");
+    const name = pathParts.pop();
+    const parentPath = pathParts.join("/");
+    const parentId = parentPath ? map[parentPath] : undefined;
+
+    const folderId = await convex.mutation(api.system.createFolder, {
+      internalKey,
+      projectId,
+      name,
+      parentId,
+    });
+
+    map[folder.path] = folderId;
+  }
+
+  return map;
+});
+```
+
+```typescript Import Files
+await step.run("create-files", async () => {
+  const files = tree.tree.filter(
+    (item) => item.type === "blob" && item.path && item.sha
+  );
+
+  for (const file of files) {
+    const { data: blob } = await octokit.rest.git.getBlob({
+      owner,
+      repo,
+      file_sha: file.sha,
+    });
+
+    const buffer = Buffer.from(blob.content, "base64");
+    const isBinary = await isBinaryFile(buffer);
+
+    if (isBinary) {
+      // Upload binary file to Convex storage
+      const uploadUrl = await convex.mutation(
+        api.system.generateUploadUrl,
+        { internalKey }
+      );
+
+      const { storageId } = await ky
+        .post(uploadUrl, { body: buffer })
+        .json();
+
+      await convex.mutation(api.system.createBinaryFile, {
+        internalKey,
+        projectId,
+        name: file.name,
+        storageId,
+        parentId,
+      });
+    } else {
+      // Create text file
+      const content = buffer.toString("utf-8");
+      await convex.mutation(api.system.createFile, {
+        internalKey,
+        projectId,
+        name: file.name,
+        content,
+        parentId,
+      });
+    }
+  }
+});
+```
+</CodeGroup>
+
+<Tip>
+Each `step.run()` is memoized - if the function fails and retries, completed steps don't re-run. This prevents duplicate API calls and database writes.
+</Tip>
+
+### AI Message Processing
+
+Processes user messages with AI agents and tools:
+
+<CodeGroup>
+```typescript Function with Cancellation
+import { createAgent, anthropic, createNetwork } from '@inngest/agent-kit';
+
+export const processMessage = inngest.createFunction(
+  {
+    id: "process-message",
+    cancelOn: [
+      {
+        event: "message/cancel",
+        if: "event.data.messageId == async.data.messageId",
+      },
+    ],
+    onFailure: async ({ event, step }) => {
+      const { messageId } = event.data.event.data;
+      
+      await step.run("update-message-on-failure", async () => {
+        await convex.mutation(api.system.updateMessageContent, {
+          internalKey,
+          messageId,
+          content: "I encountered an error. Please try again!",
+        });
+      });
+    }
+  },
+  { event: "message/sent" },
+  async ({ event, step }) => {
+    const { messageId, conversationId, projectId, message } = event.data;
+    // Process message...
+  }
+);
+```
+
+```typescript Agent with Tools
+const codingAgent = createAgent({
+  name: "polaris",
+  description: "An expert AI coding assistant",
+  system: CODING_AGENT_SYSTEM_PROMPT,
+  model: anthropic({
+    model: "claude-opus-4-20250514",
+    defaultParameters: { temperature: 0.3, max_tokens: 16000 }
+  }),
+  tools: [
+    createListFilesTool({ internalKey, projectId }),
+    createReadFilesTool({ internalKey }),
+    createUpdateFileTool({ internalKey }),
+    createCreateFilesTool({ projectId, internalKey }),
+    createCreateFolderTool({ projectId, internalKey }),
+    createRenameFileTool({ internalKey }),
+    createDeleteFilesTool({ internalKey }),
+    createScrapeUrlsTool(),
+  ],
+});
+```
+
+```typescript Network Routing
+const network = createNetwork({
+  name: "polaris-network",
+  agents: [codingAgent],
+  maxIter: 20,
+  router: ({ network }) => {
+    const lastResult = network.state.results.at(-1);
+    const hasTextResponse = lastResult?.output.some(
+      (m) => m.type === "text" && m.role === "assistant"
+    );
+    const hasToolCalls = lastResult?.output.some(
+      (m) => m.type === "tool_call"
+    );
+
+    // Stop if response has text but no tool calls
+    if (hasTextResponse && !hasToolCalls) {
+      return undefined;
+    }
+    
+    return codingAgent;
+  }
+});
+
+const result = await network.run(message);
+```
+
+```typescript Tool Example
+import { z } from "zod";
+import { createTool } from "@inngest/agent-kit";
+
+export const createListFilesTool = ({ projectId, internalKey }) => {
+  return createTool({
+    name: "listFiles",
+    description: "List all files and folders in the project",
+    parameters: z.object({}),
+    handler: async (_, { step: toolStep }) => {
+      return await toolStep?.run("list-files", async () => {
+        const files = await convex.query(api.system.getProjectFiles, {
+          internalKey,
+          projectId,
+        });
+
+        const sorted = files.sort((a, b) => {
+          if (a.type !== b.type) {
+            return a.type === "folder" ? -1 : 1;
+          }
+          return a.name.localeCompare(b.name);
+        });
+
+        return JSON.stringify(sorted);
+      });
+    }
+  });
+};
+```
+</CodeGroup>
+
+### GitHub Export Job
+
+Exports a project to a new GitHub repository:
+
+```typescript
+export const exportToGithub = inngest.createFunction(
+  {
+    id: "export-to-github",
+    cancelOn: [{
+      event: "github/export.cancel",
+      if: "event.data.projectId == async.data.projectId"
+    }],
+  },
+  { event: "github/export.repo" },
+  async ({ event, step }) => {
+    const { projectId, repoName, visibility, githubToken } = event.data;
+
+    // Create repository
+    const { data: repo } = await step.run("create-repo", async () => {
+      const octokit = new Octokit({ auth: githubToken });
+      return await octokit.rest.repos.createForAuthenticatedUser({
+        name: repoName,
+        private: visibility === "private",
+        auto_init: true,
+      });
+    });
+
+    // Wait for GitHub to initialize
+    await step.sleep("wait-for-repo-init", "3s");
+
+    // Fetch project files
+    const files = await step.run("fetch-project-files", async () => {
+      return await convex.query(api.system.getProjectFilesWithUrls, {
+        internalKey,
+        projectId,
+      });
+    });
+
+    // Create Git blobs and commit
+    const treeItems = await step.run("create-blobs", async () => {
+      // Create blob for each file...
+    });
+
+    const { data: tree } = await step.run("create-tree", async () => {
+      return await octokit.rest.git.createTree({
+        owner: user.login,
+        repo: repoName,
+        tree: treeItems,
+      });
+    });
+
+    const { data: commit } = await step.run("create-commit", async () => {
+      return await octokit.rest.git.createCommit({
+        owner: user.login,
+        repo: repoName,
+        message: "Initial commit from Polaris",
+        tree: tree.sha,
+        parents: [initialCommitSha],
+      });
+    });
+
+    return { success: true, repoUrl: repo.html_url };
+  }
+);
+```
+
+## Advanced Features
+
+### Step Sleep
+
+Pause execution for async operations:
+
+```typescript
+await step.sleep("wait-for-api", "3s");
+await step.sleep("long-wait", "5m");
+```
+
+### Error Handling
+
+<Accordion title="Retriable Errors">
+By default, all errors trigger retries:
+
+```typescript
+await step.run("fetch-data", async () => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("API request failed"); // Will retry
+  }
+  return response.json();
+});
+```
+</Accordion>
+
+<Accordion title="Non-Retriable Errors">
+Use `NonRetriableError` for errors that shouldn't retry:
+
+```typescript
+import { NonRetriableError } from "inngest";
+
+if (!process.env.API_KEY) {
+  throw new NonRetriableError("API_KEY not configured");
+}
+```
+</Accordion>
+
+<Accordion title="Failure Handlers">
+Run cleanup on failure:
+
+```typescript
+inngest.createFunction(
+  {
+    id: "my-job",
+    onFailure: async ({ event, step }) => {
+      await step.run("cleanup", async () => {
+        // Rollback changes
+        // Update status to failed
+        // Send notification
+      });
+    },
+  },
+  { event: "my/event" },
+  async ({ event, step }) => {
+    // Main logic
+  }
+);
+```
+</Accordion>
+
+### Job Cancellation
+
+Cancel running jobs with events:
+
+```typescript
+// Define cancellation condition
+inngest.createFunction(
+  {
+    id: "process-message",
+    cancelOn: [{
+      event: "message/cancel",
+      if: "event.data.messageId == async.data.messageId",
+    }],
+  },
+  { event: "message/sent" },
+  async ({ event, step }) => {
+    // Long-running AI processing
+  }
+);
+
+// Trigger cancellation
+await inngest.send({
+  name: "message/cancel",
+  data: { messageId: "msg_123" },
+});
+```
+
+## Convex Integration
+
+Inngest jobs interact with Convex using an internal API key:
+
+```typescript
+// convex/system.ts
+import { mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+export const updateImportStatus = mutation({
+  args: {
+    internalKey: v.string(),
+    projectId: v.id("projects"),
+    status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
+  },
+  handler: async (ctx, args) => {
+    // Verify internal key
+    if (args.internalKey !== process.env.POLARIS_CONVEX_INTERNAL_KEY) {
+      throw new Error("Unauthorized");
+    }
+    
+    await ctx.db.patch(args.projectId, {
+      importStatus: args.status,
+    });
+  },
+});
+```
+
+<Note>
+Set `POLARIS_CONVEX_INTERNAL_KEY` in both your `.env.local` and Inngest environment variables. Generate a random string: `openssl rand -hex 32`
+</Note>
+
+## Local Development
+
+Run the Inngest dev server:
+
+```bash
+npx inngest-cli@latest dev
+```
+
+This starts a local dashboard at `http://localhost:8288` where you can:
+
+- View running and completed jobs
+- Inspect step execution
+- Trigger test events
+- Debug failures
+
+<Tip>
+Use the Inngest dashboard to manually trigger events during development instead of going through the full UI flow.
+</Tip>
+
+## Best Practices
+
+1. **Use Steps for Idempotency**: Wrap API calls and database writes in `step.run()` so they don't repeat on retry
+
+2. **NonRetriableError for Config Issues**: If the job can't succeed without config changes, use `NonRetriableError`
+
+3. **Failure Handlers for Cleanup**: Always set status to "failed" in `onFailure` so users know something went wrong
+
+4. **Sleep for External APIs**: Some APIs (like GitHub's `auto_init`) need time to complete
+
+5. **Type Event Data**: Define TypeScript interfaces for event payloads to catch errors early
+
+6. **Secure Internal APIs**: Always validate `internalKey` in Convex mutations called from Inngest
+
+## Monitoring
+
+Inngest provides built-in monitoring:
+
+- **Function Metrics**: Success rate, duration, throughput
+- **Step Details**: See which steps passed/failed
+- **Event History**: Track all triggered events
+- **Error Tracking**: View stack traces and error messages
+
+Integrate with Sentry for additional error monitoring:
+
+```typescript
+import { sentryMiddleware } from "@inngest/middleware-sentry";
+
+export const inngest = new Inngest({ 
+  id: "polaris",
+  middleware: [sentryMiddleware()],
+});
+```
+
+<Tip>
+Configure Sentry tracing to see Inngest jobs alongside your Next.js requests in the performance dashboard.
+</Tip>

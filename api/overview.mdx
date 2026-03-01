@@ -1,0 +1,91 @@
+---
+title: 'API Overview'
+description: 'Learn how to authenticate and interact with the Polaris API'
+---
+
+## Introduction
+
+The Polaris API provides programmatic access to AI-powered code editing features. All endpoints require authentication and use JSON for request and response payloads.
+
+## Base URL
+
+```
+https://your-polaris-instance.com/api
+```
+
+## Authentication
+
+Polaris uses [Clerk](https://clerk.com) for authentication. All API requests must include a valid session token.
+
+### Authentication Flow
+
+1. User authenticates through Clerk
+2. Clerk session token is automatically included in requests
+3. API validates the session and extracts `userId`
+4. Request is processed for the authenticated user
+
+### Authentication Errors
+
+If authentication fails, you'll receive one of these error responses:
+
+<CodeGroup>
+```json 401 Unauthorized
+{
+  "error": "Unauthorized"
+}
+```
+
+```json 403 Forbidden
+{
+  "error": "Unauthorized"
+}
+```
+</CodeGroup>
+
+## Request Format
+
+All POST requests should include:
+
+- **Content-Type**: `application/json`
+- **Authentication**: Valid Clerk session token (handled by Clerk SDK)
+
+## Response Format
+
+All responses are returned as JSON with appropriate HTTP status codes:
+
+- `200` - Success
+- `400` - Bad Request (validation error)
+- `401` - Unauthorized (missing authentication)
+- `403` - Forbidden (invalid authentication)
+- `404` - Not Found (resource doesn't exist)
+- `500` - Internal Server Error
+
+## Rate Limiting
+
+Rate limiting is enforced per user session. Contact your administrator for specific limits.
+
+## Available Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Messages" icon="messages" href="/api/messages">
+    Send messages to AI assistant and trigger code generation
+  </Card>
+  <Card title="Suggestions" icon="wand-magic-sparkles" href="/api/suggestions">
+    Get AI-powered code completions at cursor position
+  </Card>
+  <Card title="Quick Edit" icon="pen-to-square" href="/api/quick-edit">
+    Edit selected code using natural language instructions
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+All endpoints follow a consistent error response format:
+
+```json
+{
+  "error": "Error message description"
+}
+```
+
+Always check the HTTP status code to determine the type of error and handle accordingly in your application.

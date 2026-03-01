@@ -1,0 +1,128 @@
+---
+title: Introduction
+description: Build production-ready applications with Polaris - a browser-based cloud IDE powered by AI
+---
+
+# Welcome to Polaris
+
+Polaris is a browser-based cloud IDE inspired by Cursor AI, designed to accelerate your development workflow with AI-powered code editing and real-time collaboration.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in minutes with your first AI-powered project
+  </Card>
+  <Card title="Self-Hosting" icon="server" href="/installation">
+    Deploy Polaris on your own infrastructure for complete control
+  </Card>
+  <Card title="Features" icon="sparkles" href="#core-features">
+    Explore AI suggestions, quick edits, and conversation-based coding
+  </Card>
+  <Card title="Tech Stack" icon="code" href="#technology-stack">
+    Built with Next.js 16, React 19, CodeMirror 6, and Claude Sonnet 4
+  </Card>
+</CardGroup>
+
+## Core Features
+
+### AI-Powered Code Editing
+
+Polaris brings intelligent code assistance directly into your browser:
+
+- **Real-time Suggestions**: Ghost text completions that predict your next line
+- **Quick Edit (Cmd+K)**: Select code and describe changes in natural language
+- **Conversation Assistant**: AI chat sidebar that understands your full project context
+- **Documentation Awareness**: Automatically scrapes and uses live documentation from URLs
+
+### Professional Code Editor
+
+Built on CodeMirror 6 with enterprise-grade features:
+
+- Multi-language syntax highlighting (JS, TS, Python, CSS, HTML, JSON, Markdown)
+- Line numbers, code folding, and minimap overview
+- Bracket matching and indentation guides
+- Multi-cursor editing with VSCode-style keybindings
+
+### Real-Time Collaboration Ready
+
+Powered by Convex for instant synchronization:
+
+- Optimistic UI updates for snappy interactions
+- Background job processing with Inngest
+- Auto-save with intelligent debouncing
+- Project-wide file management
+
+## Technology Stack
+
+Polaris is built with modern, production-ready technologies:
+
+| Category | Technologies |
+|----------|-------------|
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
+| **Editor** | CodeMirror 6, Custom Extensions, One Dark Theme |
+| **Backend** | Convex (Real-time DB), Inngest (Background Jobs) |
+| **AI** | Claude Sonnet 4 (preferred) or Gemini 2.0 Flash (free tier) |
+| **Auth** | Clerk (with GitHub OAuth) |
+| **Execution** | WebContainer API, xterm.js |
+| **UI** | shadcn/ui, Radix UI |
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Rapid Prototyping" icon="wand-magic-sparkles">
+    Build and test ideas instantly without local setup
+  </Card>
+  <Card title="Learning & Education" icon="graduation-cap">
+    Teach coding with AI assistance and instant feedback
+  </Card>
+  <Card title="Code Review" icon="code-compare">
+    Collaborate on code with AI-powered suggestions
+  </Card>
+  <Card title="Documentation" icon="book">
+    Generate and maintain docs with AI understanding
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+Polaris follows a modern full-stack architecture:
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── messages/      # Conversation API
+│   │   ├── suggestion/    # AI suggestions
+│   │   └── quick-edit/    # Cmd+K editing
+│   └── projects/          # Project pages
+├── features/
+│   ├── auth/             # Clerk authentication
+│   ├── conversations/    # AI chat system
+│   ├── editor/           # CodeMirror setup
+│   │   └── extensions/   # Custom extensions
+│   └── projects/         # Project management
+├── convex/               # Real-time database
+└── inngest/              # Background jobs
+```
+
+<Note>
+Polaris is actively developed as part of a comprehensive YouTube tutorial series. The current version (Part 1) includes editor, AI features, and file management. Part 2 will add AI agents, WebContainer execution, and GitHub integration.
+</Note>
+
+## Getting Help
+
+Join the Polaris community:
+
+- **YouTube Tutorial**: [Watch the full series](https://youtu.be/Xf9rHPNBMyQ)
+- **GitHub Repository**: [code-with-antonio/polaris](https://github.com/code-with-antonio/polaris)
+- **Issues & Discussions**: Report bugs and request features on GitHub
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Start Building" icon="play" href="/quickstart">
+    Create your first project in under 5 minutes
+  </Card>
+  <Card title="Self-Host" icon="cloud" href="/installation">
+    Deploy Polaris to your own infrastructure
+  </Card>
+</CardGroup>

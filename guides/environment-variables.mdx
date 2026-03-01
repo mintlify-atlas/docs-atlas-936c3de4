@@ -1,0 +1,358 @@
+---
+title: "Environment Variables"
+description: "Complete reference for all environment variables in Polaris"
+---
+
+## Overview
+
+This guide provides a complete reference for all environment variables needed to run Polaris. Variables are organized by service and include descriptions, examples, and whether they're required or optional.
+
+## Setup
+
+Create a `.env.local` file in your project root:
+
+```bash Terminal
+cp .env.example .env.local
+```
+
+Then configure each variable according to your needs.
+
+<Warning>
+  Never commit `.env.local` to version control. Ensure it's listed in your `.gitignore`.
+</Warning>
+
+## Required Variables
+
+These variables are required for Polaris to function:
+
+### Clerk (Authentication)
+
+<ParamField path="NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" type="string" required>
+  Your Clerk publishable key. Find this in the [Clerk Dashboard](https://dashboard.clerk.com) under **API Keys**.
+  
+  **Example:** `pk_test_c2ltcGxlLWdhcmZpc2gtOTIuY2xlcmsuYWNjb3VudHMuZGV2JA`
+  
+  **Where to get it:**
+  1. Go to [Clerk Dashboard](https://dashboard.clerk.com)
+  2. Select your application
+  3. Navigate to **API Keys**
+  4. Copy the **Publishable Key**
+</ParamField>
+
+<ParamField path="CLERK_SECRET_KEY" type="string" required>
+  Your Clerk secret key. Find this in the [Clerk Dashboard](https://dashboard.clerk.com) under **API Keys**.
+  
+  **Example:** `sk_test_ABCdefGHIjklMNOpqrSTUvwxYZ123456789`
+  
+  **Where to get it:**
+  1. Go to [Clerk Dashboard](https://dashboard.clerk.com)
+  2. Select your application
+  3. Navigate to **API Keys**
+  4. Copy the **Secret Key**
+  
+  <Warning>
+    Keep this secret! Never expose it in client-side code or commit it to version control.
+  </Warning>
+</ParamField>
+
+### Convex (Database)
+
+<ParamField path="NEXT_PUBLIC_CONVEX_URL" type="string" required>
+  Your Convex deployment URL. Generated automatically when you run `npx convex dev`.
+  
+  **Example:** `https://happy-mammal-123.convex.cloud`
+  
+  **Where to get it:**
+  1. Run `npx convex dev` in your project
+  2. The URL will be displayed in the terminal
+  3. Or find it in the [Convex Dashboard](https://dashboard.convex.dev) under your project settings
+</ParamField>
+
+<ParamField path="CONVEX_DEPLOYMENT" type="string" required>
+  Your Convex deployment identifier. Generated automatically when you run `npx convex dev`.
+  
+  **Example:** `prod:happy-mammal-123`
+  
+  **Where to get it:**
+  1. Run `npx convex dev` in your project
+  2. The deployment name will be displayed in the terminal
+  3. Or find it in your `convex.json` file
+</ParamField>
+
+<ParamField path="POLARIS_CONVEX_INTERNAL_KEY" type="string" required>
+  A random secret string used to secure internal API calls between Inngest and Convex. Generate a secure random string.
+  
+  **Example:** `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6`
+  
+  **How to generate:**
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+  
+  **Important:** Also set this in Convex:
+  ```bash
+  npx convex env set POLARIS_CONVEX_INTERNAL_KEY your-generated-key
+  ```
+</ParamField>
+
+### AI Provider (Choose One)
+
+<Warning>
+  You must configure either Anthropic (Claude) or Google (Gemini). Both are not required.
+</Warning>
+
+<ParamField path="ANTHROPIC_API_KEY" type="string" required="one of">
+  Your Anthropic API key for Claude AI. This is the **preferred** AI provider for Polaris.
+  
+  **Example:** `sk-ant-api03-1234567890abcdefghijklmnopqrstuvwxyz`
+  
+  **Where to get it:**
+  1. Go to [console.anthropic.com](https://console.anthropic.com)
+  2. Navigate to **API Keys**
+  3. Click **Create Key**
+  4. Copy the key
+  
+  **Model used:** Claude Sonnet 4 (most capable)
+</ParamField>
+
+<ParamField path="GOOGLE_GENERATIVE_AI_API_KEY" type="string" required="one of">
+  Your Google AI Studio API key for Gemini AI. This is the **free alternative** to Claude.
+  
+  **Example:** `AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ123456789`
+  
+  **Where to get it:**
+  1. Go to [aistudio.google.com](https://aistudio.google.com)
+  2. Click **Get API Key**
+  3. Create or select a project
+  4. Copy the API key
+  
+  **Model used:** Gemini 2.0 Flash (free tier available)
+</ParamField>
+
+## Optional Variables
+
+These variables enable additional features but are not required for core functionality:
+
+### Firecrawl (Web Scraping)
+
+<ParamField path="FIRECRAWL_API_KEY" type="string">
+  Your Firecrawl API key for scraping documentation and websites to provide context to the AI.
+  
+  **Example:** `fc-1234567890abcdefghijklmnopqrstuvwxyz`
+  
+  **Where to get it:**
+  1. Go to [firecrawl.dev](https://cwa.run/firecrawl)
+  2. Sign up for an account
+  3. Navigate to **API Keys**
+  4. Copy your API key
+  
+  **Used for:** The AI can scrape and read documentation URLs you provide in conversations to give more accurate answers.
+</ParamField>
+
+### Sentry (Error Tracking)
+
+<ParamField path="SENTRY_DSN" type="string">
+  Your Sentry Data Source Name (DSN) for error tracking and monitoring.
+  
+  **Example:** `https://abc123def456ghi789jkl012mno345pq@o1234567.ingest.sentry.io/9876543`
+  
+  **Where to get it:**
+  1. Go to [sentry.io](https://cwa.run/sentry)
+  2. Create a new project (or select existing)
+  3. Navigate to **Settings** → **Projects** → **Client Keys (DSN)**
+  4. Copy the DSN
+  
+  **Used for:** Error tracking, performance monitoring, and LLM observability.
+</ParamField>
+
+## Convex-Only Environment Variables
+
+Some variables must be set directly in your Convex deployment using the CLI:
+
+### Required in Convex
+
+```bash Terminal
+# Clerk JWT validation
+npx convex env set CLERK_JWT_ISSUER_DOMAIN https://your-app.clerk.accounts.dev
+
+# Internal API security
+npx convex env set POLARIS_CONVEX_INTERNAL_KEY your-same-random-key-from-env-local
+```
+
+<ParamField path="CLERK_JWT_ISSUER_DOMAIN" type="string" required>
+  Your Clerk JWT issuer domain. This is used by Convex to validate authentication tokens.
+  
+  **Example:** `https://happy-panda-12.clerk.accounts.dev`
+  
+  **Where to get it:**
+  1. Go to [Clerk Dashboard](https://dashboard.clerk.com)
+  2. Select your application
+  3. Navigate to **API Keys**
+  4. Find the **Issuer** field under **JWT Template**
+</ParamField>
+
+## Complete Example
+
+Here's a complete `.env.local` file with all variables:
+
+<CodeGroup>
+```bash .env.local (with Anthropic)
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Convex Database
+NEXT_PUBLIC_CONVEX_URL=https://happy-mammal-123.convex.cloud
+CONVEX_DEPLOYMENT=prod:happy-mammal-123
+POLARIS_CONVEX_INTERNAL_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+
+# AI Provider - Anthropic (preferred)
+ANTHROPIC_API_KEY=sk-ant-api03-...
+
+# Optional: Firecrawl (web scraping)
+FIRECRAWL_API_KEY=fc-...
+
+# Optional: Sentry (error tracking)
+SENTRY_DSN=https://...@o1234567.ingest.sentry.io/9876543
+```
+
+```bash .env.local (with Google Gemini)
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Convex Database
+NEXT_PUBLIC_CONVEX_URL=https://happy-mammal-123.convex.cloud
+CONVEX_DEPLOYMENT=prod:happy-mammal-123
+POLARIS_CONVEX_INTERNAL_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+
+# AI Provider - Google (free alternative)
+GOOGLE_GENERATIVE_AI_API_KEY=AIzaSy...
+
+# Optional: Firecrawl (web scraping)
+FIRECRAWL_API_KEY=fc-...
+
+# Optional: Sentry (error tracking)
+SENTRY_DSN=https://...@o1234567.ingest.sentry.io/9876543
+```
+</CodeGroup>
+
+## Validation
+
+After setting up your environment variables, validate them:
+
+<Steps>
+  <Step title="Check Next.js Environment">
+    Start the development server and check for any errors:
+    
+    ```bash Terminal
+    npm run dev
+    ```
+    
+    Missing required variables will show clear error messages.
+  </Step>
+
+  <Step title="Check Convex Environment">
+    List all Convex environment variables:
+    
+    ```bash Terminal
+    npx convex env list
+    ```
+    
+    Ensure `CLERK_JWT_ISSUER_DOMAIN` and `POLARIS_CONVEX_INTERNAL_KEY` are set.
+  </Step>
+
+  <Step title="Test Authentication">
+    Visit `http://localhost:3000` and try signing in with GitHub.
+  </Step>
+
+  <Step title="Test AI Integration">
+    Create a project and send a message to the AI assistant to verify the API key is working.
+  </Step>
+</Steps>
+
+## Environment-Specific Configuration
+
+### Development
+
+Use `.env.local` for local development:
+
+```bash Terminal
+npx convex dev  # Uses development deployment
+npm run dev     # Reads from .env.local
+```
+
+### Production
+
+For production deployments:
+
+1. Set environment variables in your hosting provider (Vercel, etc.)
+2. Deploy Convex to production:
+   ```bash Terminal
+   npx convex deploy --prod
+   ```
+3. Set production Convex variables:
+   ```bash Terminal
+   npx convex env set CLERK_JWT_ISSUER_DOMAIN your-domain --prod
+   npx convex env set POLARIS_CONVEX_INTERNAL_KEY your-key --prod
+   ```
+
+## Troubleshooting
+
+### Variables Not Loading
+
+1. Ensure `.env.local` is in the project root (same level as `package.json`)
+2. Restart the development server after changing `.env.local`
+3. Check for typos in variable names (they're case-sensitive)
+
+### "Missing API Key" Errors
+
+1. Verify the variable is set in `.env.local`
+2. Check that the variable name matches exactly (e.g., `ANTHROPIC_API_KEY` not `ANTHROPIC_KEY`)
+3. Ensure there are no extra spaces or quotes around the value
+
+### Convex Authentication Issues
+
+If Convex shows "Unauthorized" errors:
+
+1. Verify `CLERK_JWT_ISSUER_DOMAIN` is set in Convex:
+   ```bash Terminal
+   npx convex env get CLERK_JWT_ISSUER_DOMAIN
+   ```
+2. Ensure it matches your Clerk issuer domain exactly
+3. Restart the Convex dev server:
+   ```bash Terminal
+   npx convex dev
+   ```
+
+## Security Best Practices
+
+<Warning>
+  Follow these security guidelines when working with environment variables:
+</Warning>
+
+1. **Never commit secrets** to version control
+   - Keep `.env.local` in `.gitignore`
+   - Use `.env.example` with placeholder values for documentation
+
+2. **Use different keys per environment**
+   - Development keys for local work
+   - Production keys for deployed app
+   - Never use production keys in development
+
+3. **Rotate keys regularly**
+   - Generate new API keys periodically
+   - Update keys immediately if compromised
+
+4. **Limit key permissions**
+   - Use API keys with minimum required permissions
+   - Enable key restrictions where possible
+
+5. **Monitor key usage**
+   - Check service dashboards for unexpected usage
+   - Set up alerts for unusual activity
+
+## Next Steps
+
+- [Authentication Setup](/guides/authentication) - Configure Clerk authentication
+- [Database Setup](/guides/database-setup) - Set up Convex database

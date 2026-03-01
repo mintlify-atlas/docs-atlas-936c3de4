@@ -1,0 +1,231 @@
+---
+title: Project Structure
+description: Understanding the codebase organization and architecture of Polaris
+---
+
+Polaris is organized into feature-based modules with a clear separation between frontend, backend, and infrastructure concerns. This guide explains the directory structure and how different parts of the system work together.
+
+## Directory Overview
+
+The codebase is split into two main directories:
+
+```
+polaris/
+├── src/                    # Application code
+└── convex/                 # Backend database & API
+```
+
+## Source Directory (`src/`)
+
+### App Router (`src/app/`)
+
+Polaris uses Next.js 15's App Router with the following structure:
+
+```
+src/app/
+├── api/                   # API route handlers
+│   ├── inngest/          # Inngest event endpoint
+│   ├── messages/         # Conversation streaming API
+│   ├── quick-edit/       # Cmd+K code editing
+│   └── suggestion/       # AI code suggestions
+└── projects/
+    └── [projectId]/      # Dynamic project routes
+```
+
+<Note>
+API routes in `src/app/api/` handle client-side requests, while long-running operations are delegated to Inngest background jobs.
+</Note>
+
+### Features (`src/features/`)
+
+Features are organized by domain with a consistent structure:
+
+<Accordion title="Editor Feature">
+```
+src/features/editor/
+├── components/           # React components
+│   ├── code-editor.tsx
+│   └── tab-bar.tsx
+├── extensions/          # CodeMirror extensions
+│   ├── custom-setup.ts
+│   ├── language-extension.ts
+│   ├── minimap.ts
+│   ├── theme.ts
+│   ├── selection-tooltip.ts
+│   ├── suggestion/
+│   └── quick-edit/
+├── hooks/               # React hooks
+│   └── use-editor.ts
+└── store/              # Zustand state
+    └── editor-store.ts
+```
+
+The editor feature contains all CodeMirror-related logic and custom extensions for AI features.
+</Accordion>
+
+<Accordion title="Conversations Feature">
+```
+src/features/conversations/
+├── components/          # Chat UI components
+├── hooks/              # Conversation hooks
+├── inngest/           # Background job handlers
+│   ├── process-message.ts
+│   ├── constants.ts
+│   └── tools/         # AI agent tools
+│       ├── list-files.ts
+│       ├── read-files.ts
+│       ├── update-file.ts
+│       ├── create-files.ts
+│       ├── create-folder.ts
+│       ├── rename-file.ts
+│       ├── delete-files.ts
+│       └── scrape-urls.ts
+└── constants.ts
+```
+
+Processes AI conversations and manages the chat interface.
+</Accordion>
+
+<Accordion title="Projects Feature">
+```
+src/features/projects/
+├── components/         # Project UI
+├── hooks/             # Project hooks
+└── inngest/          # GitHub integration jobs
+    ├── import-github-repo.ts
+    └── export-to-github.ts
+```
+
+Handles project management and GitHub import/export.
+</Accordion>
+
+<Accordion title="Preview Feature">
+```
+src/features/preview/
+├── components/        # WebContainer UI
+├── hooks/            # Preview hooks
+└── utils/           # WebContainer utilities
+```
+
+Manages in-browser code execution with WebContainer (Part 2 feature).
+</Accordion>
+
+### Components (`src/components/`)
+
+Shared components used across features:
+
+```
+src/components/
+├── ui/                # shadcn/ui primitives
+│   ├── button.tsx
+│   ├── dialog.tsx
+│   ├── input.tsx
+│   └── ...
+└── ai-elements/      # AI-specific components
+    ├── markdown-renderer.tsx
+    └── code-block.tsx
+```
+
+### Background Jobs (`src/inngest/`)
+
+Inngest client and function registry:
+
+```typescript
+// src/inngest/client.ts
+import { Inngest } from "inngest";
+import { sentryMiddleware } from "@inngest/middleware-sentry";
+
+export const inngest = new Inngest({ 
+  id: "polaris",
+  middleware: [sentryMiddleware()],
+});
+```
+
+All Inngest functions are registered in `src/inngest/functions.ts` and organized within their respective feature directories.
+
+### Utilities (`src/lib/`)
+
+Shared utilities and configurations:
+
+```
+src/lib/
+├── utils.ts          # Helper functions
+├── convex-client.ts  # Convex client for server-side
+├── firecrawl.ts      # Firecrawl client
+└── ...
+```
+
+## Convex Backend (`convex/`)
+
+Convex handles all database operations and real-time subscriptions:
+
+```
+convex/
+├── schema.ts            # Database schema definitions
+├── projects.ts          # Project queries/mutations
+├── files.ts            # File CRUD operations
+├── conversations.ts    # Conversation operations
+├── messages.ts         # Message operations
+└── system.ts          # Internal API for Inngest
+```
+
+<Note>
+The `system.ts` file contains internal mutations that can only be called with `POLARIS_CONVEX_INTERNAL_KEY` from Inngest jobs.
+</Note>
+
+## Tech Stack Summary
+
+| Category | Technologies |
+|----------|-------------|
+| **Frontend** | Next.js 15, React 19, TypeScript, Tailwind CSS 4 |
+| **Editor** | CodeMirror 6, Custom Extensions, One Dark Theme |
+| **Backend** | Convex (Real-time DB), Inngest (Background Jobs) |
+| **AI** | Claude Sonnet 4, Gemini 2.0 Flash, AgentKit |
+| **Auth** | Clerk (with GitHub OAuth) |
+| **Execution** | WebContainer API, xterm.js |
+| **UI** | shadcn/ui, Radix UI |
+
+## Key Architectural Patterns
+
+### Feature-Based Organization
+
+Each feature is self-contained with its own components, hooks, state management, and background jobs. This makes the codebase easier to navigate and maintain.
+
+### Real-Time Subscriptions
+
+Convex provides reactive queries that automatically update the UI when data changes:
+
+```typescript
+// Auto-updates when files change
+const files = useQuery(api.files.getProjectFiles, { projectId });
+```
+
+### Background Job Pattern
+
+Long-running operations (AI processing, GitHub operations) run in Inngest to keep the UI responsive:
+
+```
+Client → API Route → Inngest Event → Background Job → Convex Update → Real-time UI
+```
+
+### State Management
+
+Polaris uses multiple state management approaches:
+
+- **Zustand**: Local UI state (editor, file explorer)
+- **Convex**: Server state with real-time sync
+- **React Context**: Theme, auth state
+
+<Tip>
+When adding new features, follow the existing feature structure: create a directory under `src/features/` with `components/`, `hooks/`, and optionally `inngest/` subdirectories.
+</Tip>
+
+## Development Scripts
+
+```bash
+npm run dev       # Start Next.js dev server (port 3000)
+npx convex dev    # Start Convex backend
+npx inngest-cli dev  # Start Inngest dev server
+```
+
+All three must be running simultaneously for full functionality.

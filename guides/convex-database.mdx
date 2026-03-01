@@ -1,0 +1,237 @@
+---
+title: Convex database integration
+description: Set up and use Convex for real-time data synchronization
+---
+
+Convex is the real-time database powering Polaris, providing instant updates across all clients.
+
+## Why Convex?
+
+Convex offers several advantages for Polaris:
+
+- **Real-time subscriptions** - UI updates instantly when data changes
+- **Type-safe** - Full TypeScript support with generated types
+- **Reactive queries** - React components re-render automatically
+- **Built-in auth** - Integrates seamlessly with Clerk
+- **Optimistic updates** - Instant UI feedback before server confirmation
+
+## Setup
+
+<Steps>
+  <Step title="Create a Convex project">
+    1. Visit [convex.dev](https://convex.dev)
+    2. Create an account and new project
+    3. Copy your deployment URL
+  </Step>
+
+  <Step title="Install Convex CLI">
+    ```bash
+    npm install -g convex
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Add to `.env.local`:
+
+    ```bash
+    NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+    CONVEX_DEPLOYMENT=your-deployment
+    ```
+  </Step>
+
+  <Step title="Start Convex development server">
+    ```bash
+    npx convex dev
+    ```
+
+    This watches for schema changes and keeps types in sync.
+  </Step>
+</Steps>
+
+## Database schema
+
+The Polaris schema is defined in `convex/schema.ts` with four tables:
+
+### Projects
+
+Stores user projects with import/export status:
+
+```typescript
+projects: defineTable({
+  name: v.string(),
+  ownerId: v.string(),
+  updatedAt: v.number(),
+  importStatus: v.optional(
+    v.union(
+      v.literal("importing"),
+      v.literal("completed"),
+      v.literal("failed")
+    )
+  ),
+  exportStatus: v.optional(
+    v.union(
+      v.literal("exporting"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("cancelled")
+    )
+  ),
+  exportRepoUrl: v.optional(v.string()),
+  settings: v.optional(
+    v.object({
+      installCommand: v.optional(v.string()),
+      devCommand: v.optional(v.string())
+    })
+  )
+}).index("by_owner", ["ownerId"])
+```
+
+### Files
+
+Hierarchical file system with text and binary file support:
+
+```typescript
+files: defineTable({
+  projectId: v.id("projects"),
+  parentId: v.optional(v.id("files")),
+  name: v.string(),
+  type: v.union(v.literal("file"), v.literal("folder")),
+  content: v.optional(v.string()),
+  storageId: v.optional(v.id("_storage")),
+  updatedAt: v.number()
+})
+  .index("by_project", ["projectId"])
+  .index("by_parent", ["parentId"])
+  .index("by_project_parent", ["projectId", "parentId"])
+```
+
+### Conversations
+
+AI chat threads:
+
+```typescript
+conversations: defineTable({
+  projectId: v.id("projects"),
+  title: v.string(),
+  updatedAt: v.number()
+}).index("by_project", ["projectId"])
+```
+
+### Messages
+
+Chat messages with processing status:
+
+```typescript
+messages: defineTable({
+  conversationId: v.id("conversations"),
+  projectId: v.id("projects"),
+  role: v.union(v.literal("user"), v.literal("assistant")),
+  content: v.string(),
+  status: v.optional(
+    v.union(
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    )
+  )
+})
+  .index("by_conversation", ["conversationId"])
+  .index("by_project_status", ["projectId", "status"])
+```
+
+## Using Convex in React
+
+Convex provides React hooks for real-time data:
+
+### Queries (read data)
+
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function ProjectList() {
+  const projects = useQuery(api.projects.list);
+  
+  if (projects === undefined) {
+    return <div>Loading...</div>;
+  }
+  
+  return (
+    <div>
+      {projects.map((project) => (
+        <div key={project._id}>{project.name}</div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Mutations (write data)
+
+```typescript
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function CreateProject() {
+  const createProject = useMutation(api.projects.create);
+  
+  const handleCreate = async () => {
+    await createProject({ name: "My Project" });
+  };
+  
+  return <button onClick={handleCreate}>Create</button>;
+}
+```
+
+### Actions (external API calls)
+
+Actions can call external APIs like AI providers:
+
+```typescript
+import { action } from "./_generated/server";
+import { api } from "./_generated/api";
+
+export const generateSuggestion = action({
+  handler: async (ctx, args) => {
+    // Call external AI API
+    const response = await fetch("https://api.anthropic.com/...");
+    
+    // Store result in database
+    await ctx.runMutation(api.files.updateFile, {
+      fileId: args.fileId,
+      content: result
+    });
+  }
+});
+```
+
+## Development workflow
+
+1. **Schema changes**: Edit `convex/schema.ts`
+2. **Auto-sync**: `npx convex dev` regenerates types
+3. **Write functions**: Create queries/mutations in `convex/` directory
+4. **Use in React**: Import from `api._generated.api`
+
+## Production deployment
+
+Convex automatically deploys when you push to your git repository:
+
+1. Link your repository in the Convex dashboard
+2. Configure environment variables in production
+3. Deploy happens automatically on push
+
+## Best practices
+
+<Tip>
+Use indexes for queries that filter or sort data. Polaris indexes by `ownerId` for fast user-specific queries.
+</Tip>
+
+<Warning>
+Never store sensitive data in plain text. Use Convex environment variables for secrets.
+</Warning>
+
+## Learn more
+
+- [Convex documentation](https://docs.convex.dev)
+- [React integration](https://docs.convex.dev/client/react)
+- [Schema design guide](https://docs.convex.dev/database/schemas)

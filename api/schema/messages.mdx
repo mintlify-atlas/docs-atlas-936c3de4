@@ -1,0 +1,268 @@
+---
+title: 'Messages Schema'
+description: 'Messages table schema and internal operations'
+---
+
+## Schema Definition
+
+The `messages` table stores individual messages within conversations. Messages are created and managed by the AI agent system.
+
+### Fields
+
+<ResponseField name="_id" type="Id<'messages'>" required>
+  Unique message identifier
+</ResponseField>
+
+<ResponseField name="conversationId" type="Id<'conversations'>" required>
+  ID of the conversation this message belongs to
+</ResponseField>
+
+<ResponseField name="projectId" type="Id<'projects'>" required>
+  ID of the project (denormalized for efficient querying)
+</ResponseField>
+
+<ResponseField name="role" type="string" required>
+  Message sender role
+  
+  <Expandable title="Possible values">
+    - `"user"` - Message from the user
+    - `"assistant"` - Message from the AI assistant
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="content" type="string" required>
+  Message content (text)
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Processing status for assistant messages
+  
+  <Expandable title="Possible values">
+    - `"processing"` - AI is generating the response
+    - `"completed"` - Response generation complete
+    - `"cancelled"` - Generation was cancelled
+  </Expandable>
+</ResponseField>
+
+### Indexes
+
+<ResponseField name="by_conversation" type="index">
+  Index on `conversationId` for retrieving all messages in a conversation
+  
+  **Fields:** `["conversationId"]`
+</ResponseField>
+
+<ResponseField name="by_project_status" type="index">
+  Composite index for finding messages by project and status (used for monitoring processing messages)
+  
+  **Fields:** `["projectId", "status"]`
+</ResponseField>
+
+## User-Facing Queries
+
+Messages are typically retrieved through the `conversations.getMessages` query rather than directly. See [Conversations Schema](/api/schema/conversations#getmessages) for details.
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+// Recommended: Get messages through conversations API
+function ChatMessages({ conversationId }) {
+  const messages = useQuery(api.conversations.getMessages, { 
+    conversationId 
+  });
+  
+  return messages?.map(msg => (
+    <div key={msg._id}>
+      <strong>{msg.role}:</strong> {msg.content}
+      {msg.status && <span> ({msg.status})</span>}
+    </div>
+  ));
+}
+```
+
+## Internal System Operations
+
+<Warning>
+  The operations below are internal system APIs that require authentication with `POLARIS_CONVEX_INTERNAL_KEY`. They are used by the AI agent backend and should not be called directly from client code.
+</Warning>
+
+### createMessage (Internal)
+
+Create a new message in a conversation.
+
+<ParamField path="internalKey" type="string" required>
+  Internal authentication key
+</ParamField>
+
+<ParamField path="conversationId" type="Id<'conversations'>" required>
+  Conversation identifier
+</ParamField>
+
+<ParamField path="projectId" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+<ParamField path="role" type="'user' | 'assistant'" required>
+  Message sender role
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  Message content
+</ParamField>
+
+<ParamField path="status" type="string">
+  Initial status (typically `"processing"` for assistant messages)
+</ParamField>
+
+```typescript
+// Internal system usage example
+const messageId = await ctx.runMutation(api.system.createMessage, {
+  internalKey: process.env.POLARIS_CONVEX_INTERNAL_KEY,
+  conversationId,
+  projectId,
+  role: "assistant",
+  content: "",
+  status: "processing"
+});
+```
+
+**Returns:** `Id<'messages'>` - ID of the newly created message
+
+**Side effects:** Updates conversation's `updatedAt` timestamp
+
+### updateMessageContent (Internal)
+
+Update message content and mark as completed.
+
+<ParamField path="internalKey" type="string" required>
+  Internal authentication key
+</ParamField>
+
+<ParamField path="messageId" type="Id<'messages'>" required>
+  Message identifier
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  New message content
+</ParamField>
+
+```typescript
+// Internal system usage example
+await ctx.runMutation(api.system.updateMessageContent, {
+  internalKey: process.env.POLARIS_CONVEX_INTERNAL_KEY,
+  messageId,
+  content: "Here's the updated response..."
+});
+```
+
+**Side effects:** Sets status to `"completed"`
+
+### updateMessageStatus (Internal)
+
+Update message processing status.
+
+<ParamField path="internalKey" type="string" required>
+  Internal authentication key
+</ParamField>
+
+<ParamField path="messageId" type="Id<'messages'>" required>
+  Message identifier
+</ParamField>
+
+<ParamField path="status" type="'processing' | 'completed' | 'cancelled'" required>
+  New status
+</ParamField>
+
+```typescript
+// Internal system usage example
+await ctx.runMutation(api.system.updateMessageStatus, {
+  internalKey: process.env.POLARIS_CONVEX_INTERNAL_KEY,
+  messageId,
+  status: "cancelled"
+});
+```
+
+### getProcessingMessages (Internal)
+
+Retrieve all messages currently being processed in a project.
+
+<ParamField path="internalKey" type="string" required>
+  Internal authentication key
+</ParamField>
+
+<ParamField path="projectId" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+```typescript
+// Internal system usage example
+const processing = await ctx.runQuery(api.system.getProcessingMessages, {
+  internalKey: process.env.POLARIS_CONVEX_INTERNAL_KEY,
+  projectId
+});
+```
+
+**Returns:** Array of messages with `status: "processing"`
+
+**Use case:** Monitoring active AI operations, cleanup, and recovery
+
+### getRecentMessages (Internal)
+
+Retrieve recent messages from a conversation for AI context.
+
+<ParamField path="internalKey" type="string" required>
+  Internal authentication key
+</ParamField>
+
+<ParamField path="conversationId" type="Id<'conversations'>" required>
+  Conversation identifier
+</ParamField>
+
+<ParamField path="limit" type="number">
+  Maximum number of messages to return (default: 10)
+</ParamField>
+
+```typescript
+// Internal system usage example
+const recentMessages = await ctx.runQuery(api.system.getRecentMessages, {
+  internalKey: process.env.POLARIS_CONVEX_INTERNAL_KEY,
+  conversationId,
+  limit: 20
+});
+```
+
+**Returns:** Array of up to `limit` most recent messages in chronological order
+
+**Use case:** Providing conversation context to AI agent
+
+## Message Lifecycle
+
+<Steps>
+  <Step title="User sends message">
+    User message is created with `role: "user"` and their input content
+  </Step>
+  
+  <Step title="Assistant message created">
+    System creates assistant message with `status: "processing"` and empty content
+  </Step>
+  
+  <Step title="AI generates response">
+    AI agent processes the request and streams content updates
+  </Step>
+  
+  <Step title="Message completed">
+    Final content is set and status updated to `"completed"`
+  </Step>
+</Steps>
+
+## Related Tables
+
+<Card title="Conversations" icon="comments" href="/api/schema/conversations">
+  Messages belong to conversations. Use `conversations.getMessages` to retrieve messages.
+</Card>
+
+## Source Reference
+
+- Schema definition: `convex/schema.ts:52-66`
+- Internal operations: `convex/system.ts:29-139`

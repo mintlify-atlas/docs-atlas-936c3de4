@@ -1,0 +1,341 @@
+---
+title: Project Management
+description: Create, organize, and manage your development projects in Polaris
+---
+
+Polaris provides comprehensive project management features, allowing you to create new projects, import from GitHub, organize your work, and configure project settings.
+
+## Project Dashboard
+
+The project dashboard is your starting point in Polaris, displaying all your projects in one place.
+
+### Accessing the Dashboard
+
+Navigate to `/projects` to view your project dashboard featuring:
+
+- **Project list** - All your projects with status indicators
+- **Quick actions** - Create new or import projects
+- **Search** - Find projects quickly with Command Palette
+
+### Quick Actions
+
+The dashboard provides two primary actions:
+
+<CardGroup cols={2}>
+  <Card title="New Project" icon="sparkles">
+    Create a project from scratch using AI assistance
+    
+    Keyboard: `⌘J` (Mac) or `Ctrl+J` (Windows/Linux)
+  </Card>
+  
+  <Card title="Import from GitHub" icon="github">
+    Clone a repository from GitHub into Polaris
+    
+    Keyboard: `⌘I` (Mac) or `Ctrl+I` (Windows/Linux)
+  </Card>
+</CardGroup>
+
+## Creating Projects
+
+### AI-Assisted Project Creation
+
+Create projects by describing what you want to build:
+
+<Steps>
+  <Step title="Open New Project dialog">
+    Click "New" or press `⌘J` / `Ctrl+J`
+  </Step>
+  
+  <Step title="Describe your project">
+    Enter a natural language description:
+    
+    ```
+    Create a portfolio website with a hero section, about page, and contact form
+    ```
+    
+    ```
+    Build a todo app with React and local storage
+    ```
+    
+    ```
+    Set up a REST API with Express and MongoDB
+    ```
+  </Step>
+  
+  <Step title="Let AI generate the project">
+    Polaris will:
+    - Generate a project name
+    - Create initial file structure
+    - Write starter code based on your description
+    - Set up appropriate dependencies
+  </Step>
+  
+  <Step title="Start building">
+    You'll be automatically redirected to your new project
+  </Step>
+</Steps>
+
+<Tip>
+  Be specific in your project description. Include technologies, features, and structure you want. The AI will use this to scaffold your project appropriately.
+</Tip>
+
+### Import from GitHub
+
+Bring existing repositories into Polaris:
+
+<Steps>
+  <Step title="Open Import dialog">
+    Click "Import" or press `⌘I` / `Ctrl+I`
+  </Step>
+  
+  <Step title="Enter GitHub URL">
+    Provide the full repository URL:
+    
+    ```
+    https://github.com/username/repository
+    ```
+  </Step>
+  
+  <Step title="Start import">
+    Polaris will clone the repository:
+    - Fetches all files and folders
+    - Preserves directory structure
+    - Imports all file contents
+    - Shows import progress
+  </Step>
+  
+  <Step title="Wait for completion">
+    Import status indicators:
+    - **Importing** - Clone in progress (spinner icon)
+    - **Completed** - Ready to use (GitHub icon)
+    - **Failed** - Error occurred (alert icon)
+  </Step>
+</Steps>
+
+<Note>
+  Imported projects maintain their original structure but are stored in Polaris's database, not connected to the original Git repository.
+</Note>
+
+## Project List
+
+Your projects are displayed on the dashboard with relevant information:
+
+### Project Status Indicators
+
+Each project displays an icon indicating its source:
+
+<CardGroup cols={3}>
+  <Card title="GitHub Import" icon="github">
+    Project was imported from a GitHub repository
+  </Card>
+  
+  <Card title="Importing" icon="loader">
+    GitHub import currently in progress
+  </Card>
+  
+  <Card title="Created in Polaris" icon="globe">
+    Project created directly in Polaris
+  </Card>
+</CardGroup>
+
+### Import Error Handling
+
+If a GitHub import fails:
+
+- Project shows with an alert icon
+- Error status is displayed
+- You can retry the import or delete the project
+
+## Command Palette
+
+Quickly search and navigate to any project:
+
+<Steps>
+  <Step title="Open Command Palette">
+    Press `⌘K` (Mac) or `Ctrl+K` (Windows/Linux)
+  </Step>
+  
+  <Step title="Search projects">
+    Type to filter your project list by name
+  </Step>
+  
+  <Step title="Select project">
+    Click or press Enter to open the selected project
+  </Step>
+</Steps>
+
+<Tip>
+  The Command Palette searches project names and IDs, making it easy to find projects even if you don't remember the exact name.
+</Tip>
+
+## Project Settings
+
+### Renaming Projects
+
+Update your project name to stay organized:
+
+<Steps>
+  <Step title="Open project">
+    Navigate to the project you want to rename
+  </Step>
+  
+  <Step title="Access settings">
+    Click the project name in the navigation bar
+  </Step>
+  
+  <Step title="Edit name">
+    Enter the new name and save
+  </Step>
+</Steps>
+
+<Note>
+  Project names are for organization only and don't affect the functionality or file structure.
+</Note>
+
+## Project Workspace
+
+When you open a project, you enter the full development environment:
+
+### Workspace Layout
+
+The project workspace is divided into three main areas:
+
+<CardGroup cols={3}>
+  <Card title="File Explorer" icon="folder-tree">
+    Left sidebar showing your project's file structure
+  </Card>
+  
+  <Card title="Code Editor" icon="code">
+    Central area with tabs for editing files
+  </Card>
+  
+  <Card title="AI Assistant" icon="message-square">
+    Right sidebar for conversational help
+  </Card>
+</CardGroup>
+
+### Navigation Bar
+
+The top navigation provides:
+
+- **Project name** - Current project identifier
+- **Settings access** - Project configuration
+- **Export options** - Save work externally
+
+## Exporting Projects
+
+Save your work outside of Polaris:
+
+### Export to GitHub
+
+Push your project to a GitHub repository:
+
+<Steps>
+  <Step title="Open export menu">
+    Click the export button in the navigation
+  </Step>
+  
+  <Step title="Select GitHub export">
+    Choose "Export to GitHub" option
+  </Step>
+  
+  <Step title="Configure repository">
+    - Provide repository details
+    - Set visibility (public/private)
+    - Add description
+  </Step>
+  
+  <Step title="Confirm export">
+    Your project files will be pushed to the new GitHub repository
+  </Step>
+</Steps>
+
+<Note>
+  You'll need to authenticate with GitHub to export projects. The export creates a new repository or updates an existing one.
+</Note>
+
+## Keyboard Shortcuts
+
+### Dashboard
+
+| Shortcut | Action |
+|----------|--------|
+| `⌘K` / `Ctrl+K` | Open Command Palette (search projects) |
+| `⌘J` / `Ctrl+J` | Create new project |
+| `⌘I` / `Ctrl+I` | Import from GitHub |
+
+### Project View
+
+| Shortcut | Action |
+|----------|--------|
+| `⌘K` / `Ctrl+K` | Search files and commands |
+| `⌘S` / `Ctrl+S` | Save current file (auto-save enabled) |
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Descriptive Names" icon="tag">
+    Use clear, descriptive project names to easily identify projects
+  </Card>
+  
+  <Card title="Organize Files" icon="folder">
+    Create a logical folder structure as your project grows
+  </Card>
+  
+  <Card title="Use Conversations" icon="messages">
+    Keep different features or fixes in separate AI conversations
+  </Card>
+  
+  <Card title="Regular Exports" icon="upload">
+    Export to GitHub regularly to back up your work
+  </Card>
+</CardGroup>
+
+## Project Metadata
+
+Each project automatically tracks:
+
+- **Creation time** - When the project was created
+- **Last updated** - Most recent modification timestamp
+- **Import status** - For GitHub imports
+- **Owner** - Project creator
+
+### Automatic Updates
+
+Projects are automatically updated when:
+
+- Files are created, modified, or deleted
+- Project settings are changed
+- Conversations are created
+
+This keeps your "Last updated" timestamp accurate without manual intervention.
+
+## Optimistic UI Updates
+
+Project operations feel instant with optimistic updates:
+
+- **Create project** - Appears in list immediately
+- **Rename project** - Name changes instantly
+- **Import progress** - Status updates in real-time
+
+<Tip>
+  The UI updates before the server confirms changes, then syncs in the background for a smooth experience.
+</Tip>
+
+## Limitations
+
+<Warning>
+  - Projects cannot currently be deleted from the UI
+  - GitHub imports are one-time operations (not continuous sync)
+  - Project names must be unique per user
+  - Large repositories may take time to import
+</Warning>
+
+## Project Capacity
+
+Polaris projects support:
+
+- Unlimited files and folders
+- Files of any text-based format
+- Multiple concurrent conversations
+- Full project history

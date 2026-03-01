@@ -1,0 +1,307 @@
+---
+title: 'AI Tools'
+description: 'AI-powered tools for gathering external documentation and web content'
+---
+
+## Overview
+
+Polaris provides AI-powered tools that enable agents to gather information from external sources. These tools help AI agents access documentation, scrape web content, and ingest reference material to provide better assistance to users.
+
+---
+
+## scrapeUrls
+
+Scrape content from web URLs to get documentation or reference material. This tool uses Firecrawl to extract clean markdown content from web pages, making it ideal for ingesting documentation, tutorials, and other reference materials.
+
+### Use Cases
+
+- User provides URLs to documentation they want to reference
+- Agent needs to look up external API documentation
+- Gathering examples or tutorials from the web
+- Importing reference implementations or code samples
+
+### Parameters
+
+<ParamField path="urls" type="array" required>
+  Array of URLs to scrape for content. Must contain at least one valid URL.
+</ParamField>
+
+### Response
+
+Returns a JSON array of scraped content objects:
+
+<ResponseField name="url" type="string" required>
+  The URL that was scraped
+</ResponseField>
+
+<ResponseField name="content" type="string" required>
+  The scraped content in markdown format, or an error message if scraping failed
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```json Tool Call
+{
+  "name": "scrapeUrls",
+  "parameters": {
+    "urls": [
+      "https://docs.example.com/api/authentication",
+      "https://github.com/example/repo/blob/main/README.md"
+    ]
+  }
+}
+```
+
+```json Response
+[
+  {
+    "url": "https://docs.example.com/api/authentication",
+    "content": "# Authentication\n\nTo authenticate with the API, you need to...\n\n## API Keys\n\nGenerate an API key from..."
+  },
+  {
+    "url": "https://github.com/example/repo/blob/main/README.md",
+    "content": "# Example Project\n\nThis project demonstrates...\n\n## Installation\n\n```bash\nnpm install example\n```"
+  }
+]
+```
+</CodeGroup>
+
+### How It Works
+
+1. **URL Validation**: Each URL is validated to ensure it's properly formatted
+2. **Firecrawl Scraping**: The tool uses Firecrawl to scrape the page and convert it to clean markdown
+3. **Error Handling**: If a URL fails to scrape, the response includes an error message for that specific URL
+4. **Batch Processing**: All URLs are processed in sequence, and results are returned together
+
+### Error Handling
+
+<Accordion title="Common Errors">
+  - **Invalid URL format**: `Error: Invalid URL format` - One or more URLs are not properly formatted
+  - **Empty array**: `Error: Provide at least one URL to scrape` - The `urls` array is empty
+  - **No content scraped**: `No content could be scraped from the provided URLs.` - All URLs failed to scrape
+  - **Individual URL failure**: `Failed to scrape URL: https://example.com` - A specific URL failed, but others may have succeeded
+</Accordion>
+
+### Response Behavior
+
+<Note>
+  The tool returns partial results even if some URLs fail to scrape. Check the `content` field for each URL to see if it contains scraped content or an error message.
+</Note>
+
+If a URL fails to scrape, its response will look like:
+
+```json
+{
+  "url": "https://invalid-url.com",
+  "content": "Failed to scrape URL: https://invalid-url.com"
+}
+```
+
+### Best Practices
+
+#### URL Selection
+
+<CodeGroup>
+```json Good - Documentation URLs
+{
+  "urls": [
+    "https://docs.stripe.com/api/charges",
+    "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API",
+    "https://react.dev/reference/react/useState"
+  ]
+}
+```
+
+```json Avoid - Non-documentation URLs
+{
+  "urls": [
+    "https://example.com",  // Generic homepage
+    "https://app.example.com/dashboard",  // Login-protected page
+    "https://example.com/download/file.pdf"  // Binary file
+  ]
+}
+```
+</CodeGroup>
+
+#### Handling Large Documentation Sites
+
+When scraping large documentation sites, prefer specific page URLs over main landing pages:
+
+<CodeGroup>
+```json Good - Specific Pages
+{
+  "urls": [
+    "https://docs.example.com/guides/getting-started",
+    "https://docs.example.com/api/authentication",
+    "https://docs.example.com/api/users"
+  ]
+}
+```
+
+```json Less Effective - Main Page Only
+{
+  "urls": [
+    "https://docs.example.com"  // May only get navigation/landing content
+  ]
+}
+```
+</CodeGroup>
+
+#### Processing Results
+
+Always check if scraping succeeded before using the content:
+
+```typescript
+const results = JSON.parse(response);
+
+for (const result of results) {
+  if (result.content.startsWith('Failed to scrape')) {
+    console.log(`Scraping failed for ${result.url}`);
+  } else {
+    // Process the markdown content
+    console.log(`Successfully scraped ${result.url}`);
+  }
+}
+```
+
+### Supported Content Types
+
+The scrapeUrls tool works best with:
+
+- HTML documentation pages
+- GitHub README files and markdown files
+- Blog posts and tutorials
+- Technical articles
+- API reference pages
+
+### Limitations
+
+<Warning>
+  The tool may not work properly with:
+  - Pages requiring authentication or login
+  - JavaScript-heavy single-page applications (SPAs) with dynamic content
+  - Pages behind CAPTCHA or bot protection
+  - PDF files or other binary formats
+  - Paywalled content
+</Warning>
+
+---
+
+## Usage Patterns
+
+### Ingesting Documentation
+
+When a user asks to reference external documentation:
+
+```typescript
+// User: "Can you help me implement Stripe payments? Here's the docs: https://docs.stripe.com/api/charges"
+
+// 1. Scrape the documentation
+{
+  "name": "scrapeUrls",
+  "parameters": {
+    "urls": ["https://docs.stripe.com/api/charges"]
+  }
+}
+
+// 2. Parse the scraped content
+// 3. Use the information to help implement the feature
+```
+
+### Comparing Multiple Sources
+
+Scrape multiple URLs to compare different implementations or approaches:
+
+```json
+{
+  "name": "scrapeUrls",
+  "parameters": {
+    "urls": [
+      "https://docs.framework-a.com/authentication",
+      "https://docs.framework-b.com/auth-guide",
+      "https://github.com/example/auth-implementation"
+    ]
+  }
+}
+```
+
+### Error Recovery
+
+If some URLs fail, you can retry with different URLs or inform the user:
+
+```typescript
+const results = JSON.parse(response);
+const failed = results.filter(r => r.content.startsWith('Failed'));
+
+if (failed.length > 0) {
+  // Inform user which URLs failed
+  // Ask for alternative URLs or try different approaches
+}
+```
+
+---
+
+## Integration with File Operations
+
+AI tools often work in conjunction with file operations. For example:
+
+1. **Scrape documentation** using `scrapeUrls`
+2. **Extract relevant code examples** from the scraped content
+3. **Create files** using `createFiles` with the extracted examples
+4. **Update existing files** using `updateFile` to integrate the documentation
+
+### Example Workflow
+
+```typescript
+// 1. User provides documentation URL
+// 2. Scrape the URL
+const scrapeResult = await scrapeUrls({
+  urls: ["https://docs.example.com/quickstart"]
+});
+
+// 3. Parse the markdown to extract code examples
+const codeExamples = extractCodeFromMarkdown(scrapeResult[0].content);
+
+// 4. Create files with the examples
+await createFiles({
+  parentId: "src-folder-id",
+  files: codeExamples.map(example => ({
+    name: example.filename,
+    content: example.code
+  }))
+});
+```
+
+---
+
+## Performance Considerations
+
+### Batch Scraping
+
+The tool processes URLs sequentially. For better performance:
+
+- Limit the number of URLs to what's actually needed (typically 1-5 URLs)
+- Avoid scraping the same URL multiple times in a conversation
+- Cache scraped content when possible
+
+### Content Size
+
+Scraped markdown content can be large. Consider:
+
+- Extracting only relevant sections from the scraped content
+- Summarizing long documentation pages
+- Breaking large documentation into multiple specific page requests
+
+---
+
+## Future AI Tools
+
+The AI tools category is designed to expand with additional capabilities:
+
+- **Documentation search**: Search across multiple documentation sites
+- **Code repository analysis**: Analyze GitHub repositories and codebases
+- **API discovery**: Automatically discover and document API endpoints
+- **Content summarization**: Summarize long documentation into key points
+
+These tools will follow the same pattern of returning structured data that can be used by AI agents to assist users more effectively.

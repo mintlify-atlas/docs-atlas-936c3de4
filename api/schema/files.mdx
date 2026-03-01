@@ -1,0 +1,388 @@
+---
+title: 'Files Schema'
+description: 'Files table schema, queries, and mutations'
+---
+
+## Schema Definition
+
+The `files` table stores both files and folders in a hierarchical structure using a parent-child relationship.
+
+### Fields
+
+<ResponseField name="_id" type="Id<'files'>" required>
+  Unique file/folder identifier
+</ResponseField>
+
+<ResponseField name="projectId" type="Id<'projects'>" required>
+  ID of the project this file belongs to
+</ResponseField>
+
+<ResponseField name="parentId" type="Id<'files'>">
+  ID of the parent folder (undefined for root-level files)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  File or folder name (e.g., `"button.tsx"`, `"components"`)
+</ResponseField>
+
+<ResponseField name="type" type="string" required>
+  File system entry type
+  
+  <Expandable title="Possible values">
+    - `"file"` - Regular file
+    - `"folder"` - Directory
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  Text file content (only for text files, undefined for folders and binary files)
+</ResponseField>
+
+<ResponseField name="storageId" type="Id<'_storage'>">
+  Reference to binary file in Convex storage (only for binary files)
+</ResponseField>
+
+<ResponseField name="updatedAt" type="number" required>
+  Unix timestamp (in milliseconds) of last update
+</ResponseField>
+
+### Indexes
+
+<ResponseField name="by_project" type="index">
+  Index on `projectId` for retrieving all files in a project
+  
+  **Fields:** `["projectId"]`
+</ResponseField>
+
+<ResponseField name="by_parent" type="index">
+  Index on `parentId` for finding children of a folder
+  
+  **Fields:** `["parentId"]`
+</ResponseField>
+
+<ResponseField name="by_project_parent" type="index">
+  Composite index for efficiently querying folder contents within a project
+  
+  **Fields:** `["projectId", "parentId"]`
+</ResponseField>
+
+## Queries
+
+### getFiles
+
+Retrieve all files and folders in a project.
+
+<ParamField path="projectId" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function ProjectFileList({ projectId }) {
+  const files = useQuery(api.files.getFiles, { projectId });
+  return files?.map(f => <div key={f._id}>{f.name}</div>);
+}
+```
+
+**Returns:** Array of all files and folders in the project
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized to access this project"` - User is not the owner
+
+### getFile
+
+Retrieve a specific file or folder by ID.
+
+<ParamField path="id" type="Id<'files'>" required>
+  File identifier
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function FileContent({ fileId }) {
+  const file = useQuery(api.files.getFile, { id: fileId });
+  return <pre>{file?.content}</pre>;
+}
+```
+
+**Returns:** File or folder object
+
+**Errors:**
+- `"File not found"` - File doesn't exist
+- `"Project not found"` - Associated project doesn't exist
+- `"Unauthorized to access this project"` - User is not the project owner
+
+### getFilePath
+
+Get the full path to a file by traversing up the parent chain.
+
+<ParamField path="id" type="Id<'files'>" required>
+  File identifier
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function Breadcrumbs({ fileId }) {
+  const path = useQuery(api.files.getFilePath, { id: fileId });
+  // path: [{ _id, name: "src" }, { _id, name: "components" }, { _id, name: "button.tsx" }]
+  return (
+    <div>
+      {path?.map((item, i) => (
+        <span key={item._id}>
+          {i > 0 && " > "}
+          {item.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+```
+
+**Returns:** Array of ancestors from root to file: `[{ _id: string, name: string }]`
+
+**Use case:** Building breadcrumb navigation (e.g., `src > components > button.tsx`)
+
+**Errors:**
+- `"File not found"` - File doesn't exist
+- `"Project not found"` - Associated project doesn't exist
+- `"Unauthorized to access this project"` - User is not the project owner
+
+### getFolderContents
+
+Get the direct children of a folder (or root-level files if no parent specified).
+
+<ParamField path="projectId" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+<ParamField path="parentId" type="Id<'files'>">
+  Parent folder ID (omit for root-level files)
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+
+function FolderView({ projectId, folderId }) {
+  const contents = useQuery(api.files.getFolderContents, {
+    projectId,
+    parentId: folderId // undefined for root
+  });
+  
+  return contents?.map(item => (
+    <div key={item._id}>
+      {item.type === "folder" ? "📁" : "📄"} {item.name}
+    </div>
+  ));
+}
+```
+
+**Returns:** Array of files and folders, sorted with folders first, then files, alphabetically within each group
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized to access this project"` - User is not the owner
+
+## Mutations
+
+### createFile
+
+Create a new text file.
+
+<ParamField path="projectId" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  File name (e.g., `"index.tsx"`)
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  File content
+</ParamField>
+
+<ParamField path="parentId" type="Id<'files'>">
+  Parent folder ID (omit for root level)
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function CreateFile({ projectId, parentId }) {
+  const createFile = useMutation(api.files.createFile);
+  
+  const handleCreate = async () => {
+    await createFile({
+      projectId,
+      parentId,
+      name: "hello.txt",
+      content: "Hello, world!"
+    });
+  };
+  
+  return <button onClick={handleCreate}>Create File</button>;
+}
+```
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized to access this project"` - User is not the owner
+- `"File already exists"` - File with same name exists in this location
+
+### createFolder
+
+Create a new folder.
+
+<ParamField path="projectId" type="Id<'projects'>" required>
+  Project identifier
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Folder name (e.g., `"components"`)
+</ParamField>
+
+<ParamField path="parentId" type="Id<'files'>">
+  Parent folder ID (omit for root level)
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function CreateFolder({ projectId, parentId }) {
+  const createFolder = useMutation(api.files.createFolder);
+  
+  const handleCreate = async () => {
+    await createFolder({
+      projectId,
+      parentId,
+      name: "components"
+    });
+  };
+  
+  return <button onClick={handleCreate}>New Folder</button>;
+}
+```
+
+**Errors:**
+- `"Project not found"` - Project doesn't exist
+- `"Unauthorized to access this project"` - User is not the owner
+- `"Folder already exists"` - Folder with same name exists in this location
+
+### updateFile
+
+Update the content of a text file.
+
+<ParamField path="id" type="Id<'files'>" required>
+  File identifier
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  New file content
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function FileEditor({ fileId }) {
+  const updateFile = useMutation(api.files.updateFile);
+  const [content, setContent] = useState("");
+  
+  const handleSave = async () => {
+    await updateFile({ id: fileId, content });
+  };
+  
+  return (
+    <>
+      <textarea value={content} onChange={e => setContent(e.target.value)} />
+      <button onClick={handleSave}>Save</button>
+    </>
+  );
+}
+```
+
+**Errors:**
+- `"File not found"` - File doesn't exist
+- `"Project not found"` - Associated project doesn't exist
+- `"Unauthorized to access this project"` - User is not the project owner
+
+### renameFile
+
+Rename a file or folder.
+
+<ParamField path="id" type="Id<'files'>" required>
+  File identifier
+</ParamField>
+
+<ParamField path="newName" type="string" required>
+  New name for the file or folder
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function RenameFile({ fileId }) {
+  const renameFile = useMutation(api.files.renameFile);
+  
+  const handleRename = async () => {
+    await renameFile({ id: fileId, newName: "new-name.tsx" });
+  };
+  
+  return <button onClick={handleRename}>Rename</button>;
+}
+```
+
+**Errors:**
+- `"File not found"` - File doesn't exist
+- `"Project not found"` - Associated project doesn't exist
+- `"Unauthorized to access this project"` - User is not the project owner
+- `"A file with this name already exists in this location"` - Name conflict
+
+### deleteFile
+
+Delete a file or folder. If deleting a folder, all descendants are recursively deleted.
+
+<ParamField path="id" type="Id<'files'>" required>
+  File identifier
+</ParamField>
+
+```typescript
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+
+function DeleteFile({ fileId }) {
+  const deleteFile = useMutation(api.files.deleteFile);
+  
+  const handleDelete = async () => {
+    if (confirm("Are you sure?")) {
+      await deleteFile({ id: fileId });
+    }
+  };
+  
+  return <button onClick={handleDelete}>Delete</button>;
+}
+```
+
+**Behavior:**
+- For files: Deletes the file and its storage reference (if binary)
+- For folders: Recursively deletes all children before deleting the folder itself
+
+**Errors:**
+- `"File not found"` - File doesn't exist
+- `"Project not found"` - Associated project doesn't exist
+- `"Unauthorized to access this project"` - User is not the project owner
+
+## Source Reference
+
+- Schema definition: `convex/schema.ts:33-44`
+- Queries and mutations: `convex/files.ts`

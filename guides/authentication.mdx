@@ -1,0 +1,206 @@
+---
+title: "Authentication Setup"
+description: "Configure Clerk authentication with GitHub OAuth for Polaris"
+---
+
+## Overview
+
+Polaris uses [Clerk](https://clerk.com) for authentication with GitHub OAuth support. This guide walks you through setting up Clerk and integrating it with Convex for secure, real-time user authentication.
+
+## Prerequisites
+
+- A Clerk account ([sign up here](https://cwa.run/clerk))
+- A Convex deployment ([see Database Setup](/guides/database-setup))
+
+## Setup Steps
+
+<Steps>
+  <Step title="Create a Clerk Application">
+    1. Go to the [Clerk Dashboard](https://dashboard.clerk.com)
+    2. Click **Add Application**
+    3. Name your application (e.g., "Polaris")
+    4. Select **GitHub** as your social login provider
+    5. Click **Create Application**
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Copy your Clerk keys from the dashboard:
+
+    <CodeGroup>
+    ```bash .env.local
+    # Clerk Authentication
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+    CLERK_SECRET_KEY=sk_test_...
+    ```
+    </CodeGroup>
+
+    <Warning>
+      Never commit these keys to version control. Keep them in `.env.local` which should be in your `.gitignore`.
+    </Warning>
+  </Step>
+
+  <Step title="Set Up Clerk Provider">
+    Polaris wraps the application with `ClerkProvider` and integrates it with Convex using `ConvexProviderWithClerk`:
+
+    ```tsx src/components/providers.tsx
+    import { ClerkProvider, useAuth } from "@clerk/nextjs";
+    import { ConvexProviderWithClerk } from "convex/react-clerk";
+    import { ConvexReactClient } from "convex/react";
+
+    const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+    export const Providers = ({ children }: { children: React.ReactNode }) => {
+      return (
+        <ClerkProvider>
+          <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+            <Authenticated>
+              {children}
+            </Authenticated>
+            <Unauthenticated>
+              <UnauthenticatedView />
+            </Unauthenticated>
+            <AuthLoading>
+              <AuthLoadingView />
+            </AuthLoading>
+          </ConvexProviderWithClerk>
+        </ClerkProvider>
+      );
+    };
+    ```
+
+    This setup provides three authentication states:
+    - **Authenticated**: User is signed in, show main app
+    - **Unauthenticated**: User is not signed in, show login page
+    - **AuthLoading**: Authentication status is being checked
+  </Step>
+
+  <Step title="Configure Convex Auth">
+    Set the Clerk JWT issuer domain in your Convex deployment:
+
+    ```bash Terminal
+    npx convex env set CLERK_JWT_ISSUER_DOMAIN https://your-clerk-domain.clerk.accounts.dev
+    ```
+
+    Your Clerk domain can be found in the Clerk Dashboard under **API Keys** → **JWT Issuer Domain**.
+
+    The Convex auth configuration automatically validates Clerk JWTs:
+
+    ```ts convex/auth.config.ts
+    import { AuthConfig } from "convex/server";
+
+    export default {
+      providers: [
+        {
+          domain: process.env.CLERK_JWT_ISSUER_DOMAIN!,
+          applicationID: "convex",
+        },
+      ],
+    } satisfies AuthConfig;
+    ```
+  </Step>
+</Steps>
+
+## Authentication Flow
+
+### User Identity
+
+Once authenticated, Convex queries and mutations can access the user's identity:
+
+```ts convex/auth.ts
+export const verifyAuth = async (ctx: QueryCtx | MutationCtx) => {
+  const identity = await ctx.auth.getUserIdentity();
+
+  if (!identity) {
+    throw new Error("Unauthorized");
+  }
+
+  return identity;
+};
+```
+
+This helper is used throughout the Convex backend to ensure only authenticated users can access their data:
+
+```ts convex/projects.ts
+export const create = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await verifyAuth(ctx);
+
+    const projectId = await ctx.db.insert("projects", {
+      name: args.name,
+      ownerId: identity.subject, // Clerk user ID
+      updatedAt: Date.now(),
+    });
+
+    return projectId;
+  },
+});
+```
+
+### Protected Routes
+
+All routes are protected by default through the `Providers` component. Users must sign in with GitHub before accessing any part of the application.
+
+## Testing Authentication
+
+<Steps>
+  <Step title="Start the Development Server">
+    ```bash Terminal
+    npm run dev
+    ```
+  </Step>
+
+  <Step title="Visit the Application">
+    Navigate to `http://localhost:3000`
+  </Step>
+
+  <Step title="Sign In with GitHub">
+    Click **Sign in with GitHub** and authorize the application
+  </Step>
+
+  <Step title="Verify Access">
+    After successful authentication, you should see the Polaris dashboard
+  </Step>
+</Steps>
+
+## Environment Variables Reference
+
+<ParamField path="NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" type="string" required>
+  Your Clerk publishable key (starts with `pk_test_` or `pk_live_`)
+</ParamField>
+
+<ParamField path="CLERK_SECRET_KEY" type="string" required>
+  Your Clerk secret key (starts with `sk_test_` or `sk_live_`)
+</ParamField>
+
+<ParamField path="CLERK_JWT_ISSUER_DOMAIN" type="string" required>
+  Your Clerk JWT issuer domain (set in Convex, not .env.local)
+</ParamField>
+
+## Troubleshooting
+
+### "Unauthorized" Error
+
+If you see unauthorized errors in Convex functions:
+
+1. Verify `CLERK_JWT_ISSUER_DOMAIN` is set correctly in Convex:
+   ```bash
+   npx convex env get CLERK_JWT_ISSUER_DOMAIN
+   ```
+
+2. Check that your Clerk keys are valid and match your environment (test vs. production)
+
+3. Ensure the Clerk application has GitHub OAuth enabled
+
+### Redirect Loop
+
+If you experience a redirect loop:
+
+1. Clear your browser cookies for `localhost`
+2. Verify your Clerk domain settings in the dashboard
+3. Check that `NEXT_PUBLIC_CONVEX_URL` is set correctly
+
+## Next Steps
+
+- [Database Setup](/guides/database-setup) - Configure Convex database
+- [Environment Variables](/guides/environment-variables) - Complete .env reference

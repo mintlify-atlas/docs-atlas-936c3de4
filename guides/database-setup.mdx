@@ -1,0 +1,368 @@
+---
+title: "Database Setup"
+description: "Configure Convex real-time database for Polaris"
+---
+
+## Overview
+
+Polaris uses [Convex](https://convex.dev) as its real-time database backend. Convex provides instant updates, type-safe queries, and seamless integration with React and authentication.
+
+## Prerequisites
+
+- A Convex account ([sign up here](https://cwa.run/convex))
+- Node.js 20.09 or later
+- Clerk authentication configured ([see Authentication Setup](/guides/authentication))
+
+## Initial Setup
+
+<Steps>
+  <Step title="Create a Convex Project">
+    1. Go to the [Convex Dashboard](https://dashboard.convex.dev)
+    2. Click **New Project**
+    3. Name your project (e.g., "polaris")
+    4. Click **Create Project**
+  </Step>
+
+  <Step title="Install Convex CLI">
+    ```bash Terminal
+    npm install convex
+    ```
+  </Step>
+
+  <Step title="Initialize Convex in Your Project">
+    ```bash Terminal
+    npx convex dev
+    ```
+
+    This will:
+    - Link your local project to the Convex deployment
+    - Generate a `NEXT_PUBLIC_CONVEX_URL` and `CONVEX_DEPLOYMENT` for you
+    - Start watching for schema and function changes
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Add the Convex variables to your `.env.local`:
+
+    <CodeGroup>
+    ```bash .env.local
+    # Convex Database
+    NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+    CONVEX_DEPLOYMENT=prod:your-deployment-name
+    POLARIS_CONVEX_INTERNAL_KEY=your-random-secure-string
+    ```
+    </CodeGroup>
+
+    <Warning>
+      `POLARIS_CONVEX_INTERNAL_KEY` should be a long random string. This is used to secure internal API calls from Inngest to Convex. Generate one using:
+      ```bash
+      node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      ```
+    </Warning>
+  </Step>
+
+  <Step title="Set Internal Key in Convex">
+    ```bash Terminal
+    npx convex env set POLARIS_CONVEX_INTERNAL_KEY your-random-secure-string
+    ```
+
+    This allows Convex to validate requests from your Inngest background jobs.
+  </Step>
+</Steps>
+
+## Database Schema
+
+Polaris uses four main tables to manage projects, files, conversations, and messages.
+
+### Projects Table
+
+Stores user projects with import/export status tracking:
+
+```ts convex/schema.ts
+projects: defineTable({
+  name: v.string(),
+  ownerId: v.string(),              // Clerk user ID
+  updatedAt: v.number(),
+  importStatus: v.optional(
+    v.union(
+      v.literal("importing"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+  ),
+  exportStatus: v.optional(
+    v.union(
+      v.literal("exporting"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+    ),
+  ),
+  exportRepoUrl: v.optional(v.string()),
+  settings: v.optional(
+    v.object({
+      installCommand: v.optional(v.string()),
+      devCommand: v.optional(v.string()),
+    })
+  ),
+}).index("by_owner", ["ownerId"])
+```
+
+**Indexes:**
+- `by_owner`: Query projects by user ID
+
+### Files Table
+
+Stores project files and folders in a tree structure:
+
+```ts convex/schema.ts
+files: defineTable({
+  projectId: v.id("projects"),
+  parentId: v.optional(v.id("files")),  // null for root-level files
+  name: v.string(),
+  type: v.union(v.literal("file"), v.literal("folder")),
+  content: v.optional(v.string()),      // Text files only
+  storageId: v.optional(v.id("_storage")), // Binary files only
+  updatedAt: v.number(),
+})
+  .index("by_project", ["projectId"])
+  .index("by_parent", ["parentId"])
+  .index("by_project_parent", ["projectId", "parentId"])
+```
+
+**Indexes:**
+- `by_project`: Get all files in a project
+- `by_parent`: Get children of a folder
+- `by_project_parent`: Efficiently query files by project and parent (used for creating/checking duplicates)
+
+**File Storage:**
+- Text files: Stored in the `content` field
+- Binary files: Stored in Convex File Storage with reference in `storageId`
+
+### Conversations Table
+
+Stores AI conversation threads per project:
+
+```ts convex/schema.ts
+conversations: defineTable({
+  projectId: v.id("projects"),
+  title: v.string(),
+  updatedAt: v.number(),
+}).index("by_project", ["projectId"])
+```
+
+**Indexes:**
+- `by_project`: Get all conversations for a project
+
+### Messages Table
+
+Stores individual messages within conversations:
+
+```ts convex/schema.ts
+messages: defineTable({
+  conversationId: v.id("conversations"),
+  projectId: v.id("projects"),
+  role: v.union(v.literal("user"), v.literal("assistant")),
+  content: v.string(),
+  status: v.optional(
+    v.union(
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    )
+  ),
+})
+  .index("by_conversation", ["conversationId"])
+  .index("by_project_status", ["projectId", "status"])
+```
+
+**Indexes:**
+- `by_conversation`: Get all messages in a conversation
+- `by_project_status`: Find processing messages for cancellation
+
+## Common Database Operations
+
+### Creating a Project
+
+```ts
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function MyComponent() {
+  const createProject = useMutation(api.projects.create);
+
+  const handleCreate = async () => {
+    const projectId = await createProject({ name: "My Project" });
+    console.log("Created project:", projectId);
+  };
+}
+```
+
+### Querying Projects
+
+```ts
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function MyComponent() {
+  const projects = useQuery(api.projects.get);
+
+  return (
+    <div>
+      {projects?.map(project => (
+        <div key={project._id}>{project.name}</div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Real-time Updates
+
+Convex automatically updates React components when data changes:
+
+```ts
+// Component A creates a file
+const createFile = useMutation(api.files.create);
+await createFile({ projectId, name: "index.js", content: "" });
+
+// Component B automatically receives the update
+const files = useQuery(api.files.list, { projectId });
+// files array updates instantly without manual refetching
+```
+
+## Internal API System
+
+Polaris uses an internal API layer (`convex/system.ts`) to allow Inngest background jobs to interact with Convex. These functions validate a shared secret key before executing:
+
+```ts convex/system.ts
+const validateInternalKey = (key: string) => {
+  const internalKey = process.env.POLARIS_CONVEX_INTERNAL_KEY;
+
+  if (!internalKey) {
+    throw new Error("POLARIS_CONVEX_INTERNAL_KEY is not configured");
+  }
+
+  if (key !== internalKey) {
+    throw new Error("Invalid internal key");
+  }
+};
+
+export const createMessage = mutation({
+  args: {
+    internalKey: v.string(),
+    conversationId: v.id("conversations"),
+    // ... other args
+  },
+  handler: async (ctx, args) => {
+    validateInternalKey(args.internalKey);
+    // ... proceed with mutation
+  },
+});
+```
+
+This system enables:
+- AI agents to modify files through Inngest
+- Background processing of messages
+- GitHub import/export operations
+
+## Environment Variables Reference
+
+<ParamField path="NEXT_PUBLIC_CONVEX_URL" type="string" required>
+  Your Convex deployment URL (generated during `npx convex dev`)
+</ParamField>
+
+<ParamField path="CONVEX_DEPLOYMENT" type="string" required>
+  Your Convex deployment identifier (generated during `npx convex dev`)
+</ParamField>
+
+<ParamField path="POLARIS_CONVEX_INTERNAL_KEY" type="string" required>
+  Random secret string for securing internal API calls. Must be set both in `.env.local` and in Convex environment.
+</ParamField>
+
+## Development Workflow
+
+### Running Convex Locally
+
+Always keep the Convex dev server running during development:
+
+```bash Terminal
+npx convex dev
+```
+
+This command:
+- Watches for changes to `convex/` files
+- Syncs schema and function changes to your deployment
+- Provides type generation for the frontend
+- Shows real-time logs
+
+### Making Schema Changes
+
+1. Edit `convex/schema.ts`
+2. Save the file
+3. Convex automatically validates and applies the changes
+4. Your TypeScript types update automatically
+
+<Warning>
+  Schema changes that remove fields or tables will delete data. Convex will warn you before applying destructive changes.
+</Warning>
+
+### Viewing Data
+
+Use the Convex Dashboard to browse and query your data:
+
+1. Go to [dashboard.convex.dev](https://dashboard.convex.dev)
+2. Select your project
+3. Click **Data** to view tables
+4. Use the query console to test queries
+
+## Troubleshooting
+
+### "POLARIS_CONVEX_INTERNAL_KEY is not configured"
+
+This error means the internal key isn't set in Convex:
+
+```bash Terminal
+npx convex env set POLARIS_CONVEX_INTERNAL_KEY your-random-secure-string
+```
+
+### "Unauthorized" Errors
+
+Check that:
+1. Clerk authentication is properly configured
+2. `CLERK_JWT_ISSUER_DOMAIN` is set in Convex
+3. The user is signed in
+
+### Schema Validation Errors
+
+If schema changes fail:
+1. Check the error message in the Convex dev terminal
+2. Ensure all required fields are present
+3. Verify index names don't conflict
+
+## Production Deployment
+
+When deploying to production:
+
+<Steps>
+  <Step title="Create Production Deployment">
+    ```bash Terminal
+    npx convex deploy
+    ```
+  </Step>
+
+  <Step title="Update Environment Variables">
+    Update your production environment with the new `NEXT_PUBLIC_CONVEX_URL` and `CONVEX_DEPLOYMENT` values.
+  </Step>
+
+  <Step title="Set Production Environment Variables in Convex">
+    ```bash Terminal
+    npx convex env set CLERK_JWT_ISSUER_DOMAIN your-production-domain --prod
+    npx convex env set POLARIS_CONVEX_INTERNAL_KEY your-key --prod
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+- [Authentication Setup](/guides/authentication) - Configure Clerk authentication
+- [Environment Variables](/guides/environment-variables) - Complete .env reference

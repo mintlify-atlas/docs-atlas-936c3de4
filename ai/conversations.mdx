@@ -1,0 +1,330 @@
+---
+title: AI Conversations
+description: Chat with an AI coding assistant that can read, create, update, and organize files across your entire project
+---
+
+Polaris includes a full-featured AI conversation system that acts as your coding partner. Unlike inline suggestions or quick edits, conversations let you have multi-turn discussions, request complex multi-file changes, and teach the AI about your project by sharing documentation.
+
+## Overview
+
+The conversation system is powered by **Claude Opus 4** and uses the Inngest agent framework to orchestrate file operations, web scraping, and streaming responses.
+
+<Note>
+Each project maintains its own conversation history. You can create multiple conversations per project to organize different tasks or features.
+</Note>
+
+## Starting a Conversation
+
+<Steps>
+  <Step title="Open the sidebar">
+    The AI conversation panel appears on the right side of the editor interface.
+  </Step>
+  
+  <Step title="Type your message">
+    Enter your request in the input field at the bottom. You can:
+    - Ask questions about your code
+    - Request new features or files
+    - Get explanations of existing code
+    - Share documentation URLs to teach the AI
+  </Step>
+  
+  <Step title="Submit and wait">
+    Press Enter or click Submit. The AI shows a "Thinking..." indicator while processing.
+  </Step>
+  
+  <Step title="Review the response">
+    The AI responds with:
+    - Explanations of what it did
+    - Summaries of files created or modified
+    - Next steps or recommendations
+  </Step>
+</Steps>
+
+## What the AI Can Do
+
+The conversation AI has access to powerful tools that let it interact with your project:
+
+### File Operations
+
+<Tabs>
+  <Tab title="List Files">
+    The AI can explore your project structure:
+    
+    ```
+    listFiles()
+    ```
+    
+    Returns a tree of all files and folders with their IDs, which the AI uses for subsequent operations.
+  </Tab>
+  
+  <Tab title="Read Files">
+    Read content from one or multiple files:
+    
+    ```
+    readFiles({ fileIds: ["abc123", "def456"] })
+    ```
+    
+    The AI uses this to understand your existing code before making changes.
+  </Tab>
+  
+  <Tab title="Create Files">
+    Create one or multiple files in a batch:
+    
+    ```
+    createFiles({
+      parentId: "folder_id",
+      files: [
+        { name: "utils.ts", content: "..." },
+        { name: "types.ts", content: "..." }
+      ]
+    })
+    ```
+    
+    The AI creates all necessary files for features you request.
+  </Tab>
+  
+  <Tab title="Update Files">
+    Modify existing file content:
+    
+    ```
+    updateFile({
+      fileId: "abc123",
+      content: "updated content"
+    })
+    ```
+  </Tab>
+  
+  <Tab title="Organize">
+    Create folders, rename files, or delete files:
+    
+    ```
+    createFolder({ name: "components", parentId: "..." })
+    renameFile({ fileId: "...", newName: "Button.tsx" })
+    deleteFiles({ fileIds: ["..."] })
+    ```
+  </Tab>
+</Tabs>
+
+### Documentation Scraping
+
+<Note>
+The AI can scrape documentation from URLs you provide using Firecrawl.
+</Note>
+
+When you share a URL in your message, the AI can use the `scrapeUrls` tool to fetch and read documentation:
+
+```
+User: Create a Next.js API route based on https://nextjs.org/docs/app/api-reference/file-conventions/route
+
+AI: *scrapes the URL*
+    *reads your project structure*
+    *creates route.ts with proper Next.js patterns*
+```
+
+This is especially useful for:
+- Framework-specific implementations
+- API integrations with third-party services
+- Following specific library patterns
+- Referencing up-to-date documentation
+
+## Example Workflows
+
+### Building a Complete Feature
+
+```
+User: Create a user authentication system with login, signup, and a protected dashboard page.
+
+AI:
+1. Lists current files to understand project structure
+2. Creates auth/ folder
+3. Creates login.tsx, signup.tsx, dashboard.tsx
+4. Creates auth utility functions
+5. Updates routing configuration
+6. Responds with summary of all changes
+```
+
+### Refactoring Existing Code
+
+```
+User: Extract all the authentication logic from app.tsx into a separate auth module.
+
+AI:
+1. Reads app.tsx to see current implementation
+2. Creates auth/index.ts with extracted logic
+3. Updates app.tsx to import from new module
+4. Verifies by listing files again
+5. Summarizes the refactoring
+```
+
+### Learning from Documentation
+
+```
+User: Add Stripe payment integration following https://docs.stripe.com/payments/quickstart
+
+AI:
+1. Scrapes Stripe documentation
+2. Reads current project structure
+3. Creates payment/ folder
+4. Creates checkout.ts, webhook.ts following Stripe patterns
+5. Explains setup steps (API keys, webhook configuration)
+```
+
+## Conversation Management
+
+### Multiple Conversations
+
+You can maintain separate conversations for different purposes:
+
+- Click the **+** icon to create a new conversation
+- Click the **History** icon to view and switch between past conversations
+- Each conversation maintains its own message history
+- The AI uses conversation history as context for follow-up requests
+
+### Conversation Titles
+
+The first message in each conversation automatically generates a descriptive title using **Claude 3.5 Haiku**. Default title is "New Conversation" until the AI generates a better one based on your first message.
+
+### Cancelling Requests
+
+If the AI is processing and you want to stop:
+
+1. Click the Stop button (appears while processing)
+2. The Inngest function receives a cancellation event
+3. Any in-progress operation is halted
+4. The message is marked as "cancelled"
+
+<Warning>
+Cancelling a request stops the AI, but file changes already made are NOT rolled back. Check what was created/modified and manually undo if needed.
+</Warning>
+
+## AI Behavior and System Prompt
+
+The AI is instructed to:
+
+- **Work silently** - Execute tools without narrating every step
+- **Complete tasks fully** - Never stop halfway or ask "should I continue?"
+- **Verify changes** - Call `listFiles` after major operations
+- **Provide clear summaries** - Explain what was accomplished in the final response
+- **Use conversation context** - Remember previous messages in the conversation
+
+### System Prompt Highlights
+
+From `/src/features/conversations/inngest/constants.ts:1`:
+
+```
+You are Polaris, an expert AI coding assistant.
+Help users by reading, creating, updating, and organizing files.
+
+Workflow:
+1. Call listFiles to see project structure
+2. Call readFiles to understand existing code
+3. Execute ALL necessary changes
+4. Verify by calling listFiles again
+5. Provide a final summary
+
+Rules:
+- Complete the ENTIRE task before responding
+- Do not stop halfway
+- Never say "Let me..." or "I'll now..." - just execute
+```
+
+## Message Flow
+
+When you send a message, here's what happens:
+
+<Steps>
+  <Step title="API receives message">
+    `/api/messages` endpoint creates user and assistant message placeholders in the database.
+  </Step>
+  
+  <Step title="Inngest event triggered">
+    A `message/sent` event is sent to Inngest with the message ID and conversation ID.
+  </Step>
+  
+  <Step title="Agent processes request">
+    The `process-message` Inngest function:
+    - Fetches conversation history (last 10 messages)
+    - Builds system prompt with context
+    - Creates the Polaris agent with all file tools
+    - Runs the agent with up to 20 iterations
+  </Step>
+  
+  <Step title="Agent uses tools">
+    The AI calls tools as needed (listFiles, readFiles, createFiles, etc.) and receives results.
+  </Step>
+  
+  <Step title="Response stored">
+    The final assistant response is saved to the database, replacing the "Thinking..." placeholder.
+  </Step>
+</Steps>
+
+## Technical Implementation
+
+### Agent Framework
+
+Polaris uses **@inngest/agent-kit** to create an agent network:
+
+```typescript
+const codingAgent = createAgent({
+  name: "polaris",
+  model: anthropic({ model: "claude-opus-4-20250514" }),
+  tools: [
+    createListFilesTool(),
+    createReadFilesTool(),
+    createUpdateFileTool(),
+    createCreateFilesTool(),
+    createCreateFolderTool(),
+    createRenameFileTool(),
+    createDeleteFilesTool(),
+    createScrapeUrlsTool(),
+  ],
+});
+```
+
+The agent runs in a network with:
+
+- **Max iterations:** 20 (prevents infinite loops)
+- **Router logic:** Continues until the AI returns text without tool calls
+- **Temperature:** 0.3 (balanced between creativity and consistency)
+- **Max tokens:** 16,000
+
+### Error Handling
+
+If the Inngest function fails:
+
+- The `onFailure` handler updates the message with: "My apologies, I encountered an error while processing your request."
+- The conversation remains intact for you to retry
+- Logs are available in the Inngest dashboard for debugging
+
+## Configuration
+
+| Setting | Value | Location |
+|---------|-------|----------|
+| Main model | Claude Opus 4 | `process-message.ts:159` |
+| Title model | Claude 3.5 Haiku | `process-message.ts:121` |
+| Temperature | 0.3 | `process-message.ts:160` |
+| Max tokens | 16,000 | `process-message.ts:160` |
+| Max iterations | 20 | `process-message.ts:178` |
+| Context messages | Last 10 | `process-message.ts:92` |
+
+## Tips for Effective Conversations
+
+1. **Be specific** - "Create a React component for a user profile card" is better than "make a component"
+2. **Share documentation** - Include URLs to framework docs, API references, or examples
+3. **Build incrementally** - Start with core functionality, then request enhancements in follow-up messages
+4. **Review changes** - Always check what files were created/modified
+5. **Use follow-ups** - The AI remembers conversation context, so you can say "now add error handling" without repeating the feature name
+
+## Comparison with Other AI Features
+
+| Feature | Scope | Best For |
+|---------|-------|----------|
+| **Conversations** | Multi-file, project-wide | Complex features, refactoring, learning from docs |
+| [Quick Edit](/ai/quick-edit) | Single selection | Fast transformations of selected code |
+| [Suggestions](/ai/suggestions) | Single line | Auto-completing as you type |
+
+## Related Features
+
+- [Documentation Scraping](/ai/documentation-scraping) - How the AI learns from URLs
+- [Quick Edit](/ai/quick-edit) - Inline code transformations
+- [Ghost Text Suggestions](/ai/suggestions) - Auto-complete suggestions

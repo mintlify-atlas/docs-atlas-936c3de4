@@ -1,0 +1,280 @@
+---
+title: Quick Edit (Cmd+K)
+description: Transform selected code using natural language instructions with AI-powered inline editing
+---
+
+Quick Edit lets you modify code by selecting it and describing what you want changed. Press `Cmd+K` (or `Ctrl+K` on Windows/Linux) on any selection to open an inline editing prompt, type your instruction, and watch the AI transform your code.
+
+## How It Works
+
+<Steps>
+  <Step title="Select code">
+    Highlight any code snippet you want to modify in the editor.
+  </Step>
+  
+  <Step title="Press Cmd+K">
+    A tooltip appears below your selection with an input field.
+  </Step>
+  
+  <Step title="Describe the change">
+    Type a natural language instruction like:
+    - "add error handling"
+    - "convert to async/await"
+    - "add TypeScript types"
+    - "optimize this loop"
+  </Step>
+  
+  <Step title="Submit">
+    Click Submit or press Enter. The AI processes your request and replaces the selected code with the edited version.
+  </Step>
+</Steps>
+
+## Example Workflows
+
+<Tabs>
+  <Tab title="Add Error Handling">
+    **Before:**
+    ```javascript
+    const data = await fetch('/api/users').then(res => res.json());
+    ```
+    
+    **Instruction:** `add try-catch error handling`
+    
+    **After:**
+    ```javascript
+    try {
+      const data = await fetch('/api/users').then(res => res.json());
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+      throw error;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Refactor to Modern Syntax">
+    **Before:**
+    ```javascript
+    function getUsers() {
+      return fetch('/api/users').then(function(res) {
+        return res.json();
+      });
+    }
+    ```
+    
+    **Instruction:** `convert to async/await with arrow function`
+    
+    **After:**
+    ```javascript
+    const getUsers = async () => {
+      const res = await fetch('/api/users');
+      return res.json();
+    };
+    ```
+  </Tab>
+  
+  <Tab title="Add TypeScript Types">
+    **Before:**
+    ```javascript
+    function calculateTotal(items) {
+      return items.reduce((sum, item) => sum + item.price, 0);
+    }
+    ```
+    
+    **Instruction:** `add typescript types`
+    
+    **After:**
+    ```typescript
+    interface Item {
+      price: number;
+    }
+    
+    function calculateTotal(items: Item[]): number {
+      return items.reduce((sum, item) => sum + item.price, 0);
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Optimize Performance">
+    **Before:**
+    ```javascript
+    const doubled = [];
+    for (let i = 0; i < numbers.length; i++) {
+      doubled.push(numbers[i] * 2);
+    }
+    ```
+    
+    **Instruction:** `simplify using map`
+    
+    **After:**
+    ```javascript
+    const doubled = numbers.map(n => n * 2);
+    ```
+  </Tab>
+</Tabs>
+
+## Documentation-Aware Editing
+
+<Note>
+Quick Edit can scrape and use documentation from URLs included in your instruction.
+</Note>
+
+If your instruction contains a URL, the AI automatically scrapes it using **Firecrawl** and uses the documentation as context when editing your code.
+
+### Example: Using External Docs
+
+**Selected code:**
+```javascript
+const button = document.createElement('button');
+button.textContent = 'Click me';
+```
+
+**Instruction:** `convert to React component using https://react.dev/reference/react/useState`
+
+**Result:**
+```jsx
+import { useState } from 'react';
+
+function Button() {
+  return <button>Click me</button>;
+}
+```
+
+The AI scrapes the React documentation URL and applies the patterns it finds to your code transformation.
+
+### Supported URL Patterns
+
+Any HTTP/HTTPS URL in your instruction will be scraped:
+
+- Documentation sites (e.g., `https://nextjs.org/docs/app/api-reference`)
+- API references (e.g., `https://docs.anthropic.com/en/api/messages`)
+- GitHub READMEs (e.g., `https://github.com/user/repo#readme`)
+- Blog posts with code examples
+
+<Tip>
+Include specific documentation pages rather than generic homepages for better results.
+</Tip>
+
+## Advanced Use Cases
+
+### Code Translation
+
+Translate between languages or frameworks:
+
+```
+// Select Python code, then:
+"convert to JavaScript"
+
+// Select class component, then:
+"convert to functional component with hooks"
+
+// Select REST endpoint, then:
+"convert to GraphQL resolver"
+```
+
+### Code Enhancement
+
+```
+"add input validation"
+"add JSDoc comments"
+"make this more readable"
+"add logging statements"
+"extract to separate function"
+```
+
+### Style Changes
+
+```
+"use single quotes instead of double quotes"
+"add semicolons"
+"remove console.logs"
+"format using prettier style"
+```
+
+## Context Provided to AI
+
+When you submit an edit instruction, the AI receives:
+
+1. **Selected code** - The exact text you highlighted
+2. **Full file context** - The entire file for understanding surrounding code
+3. **Your instruction** - The natural language edit request
+4. **Scraped documentation** (if URLs present) - Markdown content from referenced URLs
+
+This comprehensive context ensures edits fit naturally into your codebase style and structure.
+
+## UI Components
+
+The Quick Edit tooltip appears directly below your selection and includes:
+
+- **Text input** - Enter your editing instruction
+- **Submit button** - Apply the transformation
+- **Cancel button** - Dismiss without changes
+
+### Tooltip Behavior
+
+- Auto-focuses the input when opened
+- Appears only when code is selected
+- Automatically dismisses after successful edit
+- Can be cancelled at any time
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Cmd+K` (Mac) / `Ctrl+K` (Windows/Linux) | Open Quick Edit on selection |
+| `Enter` | Submit instruction |
+| `Escape` | Cancel and close tooltip |
+
+## Implementation Details
+
+<Note>
+Quick Edit is powered by **Claude 3.7 Sonnet** via the `/api/quick-edit` endpoint.
+</Note>
+
+The feature is implemented in `/src/features/editor/extensions/quick-edit/index.ts:1` using:
+
+- **StateField** - Tracks whether Quick Edit is active
+- **StateEffect** - Triggers tooltip visibility
+- **Tooltip API** - Renders the inline editing form
+- **Keymap** - Binds `Cmd+K` to open the editor
+
+## Configuration
+
+| Setting | Value | Location |
+|---------|-------|----------|
+| Keyboard shortcut | Cmd+K / Ctrl+K | `index.ts:178` |
+| Model | Claude 3.7 Sonnet | `route.ts:105` |
+| Timeout | 30 seconds | `fetcher.ts:29` |
+| Placeholder text | "Edit selected code" | `index.ts:59` |
+
+## Error Handling
+
+<Warning>
+If an edit request fails:
+- A toast notification appears: "Failed to fetch AI quick edit"
+- Your original code remains unchanged
+- The tooltip stays open so you can retry
+</Warning>
+
+If you cancel a request (by clicking Cancel or closing the tooltip), any in-flight API request is aborted to save resources.
+
+## Tips for Best Results
+
+1. **Be specific** - "add null checks" is better than "improve this"
+2. **Select meaningful chunks** - Select complete statements or logical blocks
+3. **Preserve indentation** - The AI maintains your original indentation level
+4. **Include URLs** - Reference docs directly in your instruction for framework-specific changes
+5. **Iterate quickly** - If the result isn't perfect, select and edit again with refined instructions
+
+## Comparison with Other Features
+
+| Feature | Use Case | Trigger |
+|---------|----------|----------|
+| **Quick Edit** | Transform selected code with instructions | `Cmd+K` on selection |
+| [Suggestions](/ai/suggestions) | Auto-complete as you type | Automatic (300ms delay) |
+| [Conversations](/ai/conversations) | Multi-file changes, complex tasks | Chat sidebar |
+
+## Related Features
+
+- [Ghost Text Suggestions](/ai/suggestions) - AI completions while typing
+- [Conversations](/ai/conversations) - Full project AI assistant
+- [Documentation Scraping](/ai/documentation-scraping) - Teach the AI with external docs

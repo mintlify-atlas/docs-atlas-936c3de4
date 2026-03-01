@@ -1,0 +1,323 @@
+---
+title: Terminal Integration
+description: Interactive terminal using xterm.js for WebContainer output
+---
+
+Polaris provides an integrated terminal that displays output from WebContainer processes. The terminal uses [xterm.js](https://xtermjs.org/) to render a fully-featured terminal interface in the browser.
+
+## Overview
+
+The terminal integration provides:
+
+- Real-time output streaming from WebContainer processes
+- Syntax highlighting and ANSI color support
+- Automatic sizing and responsive layout
+- Read-only display (input disabled for preview terminal)
+
+<Note>
+The preview terminal is currently read-only and displays output from install and dev commands. Interactive terminal features may be added in future versions.
+</Note>
+
+## Architecture
+
+The terminal component is built with React and xterm.js:
+
+```typescript
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
+
+interface PreviewTerminalProps {
+  output: string;
+}
+
+export const PreviewTerminal = ({ output }: PreviewTerminalProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const lastLengthRef = useRef(0);
+  // ...
+};
+```
+
+**Source:** `src/features/preview/components/preview-terminal.tsx:1-17`
+
+## Initialization
+
+The terminal is initialized once when the component mounts:
+
+<Steps>
+  <Step title="Create Terminal Instance">
+    Configure terminal options including fonts, colors, and behavior.
+    
+    ```typescript
+    const terminal = new Terminal({
+      convertEol: true,
+      disableStdin: true,
+      fontSize: 12,
+      fontFamily: "monospace",
+      theme: { background: "#1f2228" },
+    });
+    ```
+  </Step>
+  
+  <Step title="Load FitAddon">
+    The FitAddon automatically resizes the terminal to fit its container.
+    
+    ```typescript
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    ```
+  </Step>
+  
+  <Step title="Open Terminal">
+    Attach the terminal to the DOM element.
+    
+    ```typescript
+    terminal.open(containerRef.current);
+    ```
+  </Step>
+  
+  <Step title="Write Initial Output">
+    Display any existing output from previous processes.
+    
+    ```typescript
+    if (output) {
+      terminal.write(output);
+      lastLengthRef.current = output.length;
+    }
+    ```
+  </Step>
+</Steps>
+
+**Source:** `src/features/preview/components/preview-terminal.tsx:20-44`
+
+## Configuration Options
+
+The terminal is configured with specific options for preview display:
+
+| Option | Value | Purpose |
+|--------|-------|--------|
+| `convertEol` | `true` | Automatically convert line endings |
+| `disableStdin` | `true` | Prevent user input (read-only) |
+| `fontSize` | `12` | Font size in pixels |
+| `fontFamily` | `"monospace"` | Use system monospace font |
+| `theme.background` | `"#1f2228"` | Match Polaris dark theme |
+
+**Source:** `src/features/preview/components/preview-terminal.tsx:23-28`
+
+## Output Streaming
+
+The terminal efficiently handles incremental output updates:
+
+```typescript
+useEffect(() => {
+  if (!terminalRef.current) return;
+
+  // Handle output reset (e.g., on restart)
+  if (output.length < lastLengthRef.current) {
+    terminalRef.current.clear();
+    lastLengthRef.current = 0;
+  }
+
+  // Write only new data since last update
+  const newData = output.slice(lastLengthRef.current);
+  if (newData) {
+    terminalRef.current.write(newData);
+    lastLengthRef.current = output.length;
+  }
+}, [output]);
+```
+
+**Source:** `src/features/preview/components/preview-terminal.tsx:60-73`
+
+<Note>
+The terminal only writes incremental changes by tracking `lastLengthRef`. This prevents re-rendering the entire output on every update, improving performance.
+</Note>
+
+## Auto-Sizing
+
+The FitAddon ensures the terminal always fits its container:
+
+### Initial Fit
+
+```typescript
+requestAnimationFrame(() => fitAddon.fit());
+```
+
+Using `requestAnimationFrame` ensures the DOM is fully rendered before calculating size.
+
+### Responsive Resizing
+
+```typescript
+const resizeObserver = new ResizeObserver(() => fitAddon.fit());
+resizeObserver.observe(containerRef.current);
+
+return () => {
+  resizeObserver.disconnect();
+  terminal.dispose();
+};
+```
+
+**Source:** `src/features/preview/components/preview-terminal.tsx:44-54`
+
+## WebContainer Integration
+
+The terminal receives output from WebContainer process streams:
+
+```typescript
+const appendOutput = (data: string) => {
+  setTerminalOutput((prev) => prev + data);
+};
+
+// Install command output
+const installProcess = await container.spawn(installBin, installArgs);
+installProcess.output.pipeTo(
+  new WritableStream({
+    write(data) {
+      appendOutput(data);
+    },
+  })
+);
+
+// Dev command output
+const devProcess = await container.spawn(devBin, devArgs);
+devProcess.output.pipeTo(
+  new WritableStream({
+    write(data) {
+      appendOutput(data);
+    },
+  })
+);
+```
+
+**Source:** `src/features/preview/hooks/use-webcontainer.ts:80-128`
+
+## Output Format
+
+The terminal displays formatted output with command prompts:
+
+```bash
+$ npm install
+added 123 packages in 5s
+
+$ npm run dev
+> dev
+> next dev
+
+  ▲ Next.js 16.1.1
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 2.3s
+```
+
+Commands are prefixed with `$` for clarity:
+
+```typescript
+appendOutput(`$ ${installCmd}\n`);
+// ... run command ...
+appendOutput(`\n$ ${devCmd}\n`);
+```
+
+**Source:** `src/features/preview/hooks/use-webcontainer.ts:100-120`
+
+## Styling
+
+The terminal container uses Tailwind CSS with xterm-specific overrides:
+
+```tsx
+<div
+  ref={containerRef}
+  className="flex-1 min-h-0 p-3 [&_.xterm]:h-full! [&_.xterm-viewport]:h-full! [&_.xterm-screen]:h-full! bg-sidebar"
+/>
+```
+
+**Source:** `src/features/preview/components/preview-terminal.tsx:76-79`
+
+### Class Breakdown
+
+- `flex-1` - Grow to fill available space
+- `min-h-0` - Allow shrinking below content size
+- `p-3` - Padding around terminal
+- `[&_.xterm]:h-full!` - Force full height for xterm elements
+- `bg-sidebar` - Match Polaris theme background
+
+## ANSI Support
+
+xterm.js automatically handles ANSI escape codes for:
+
+- **Colors:** Foreground and background colors
+- **Styles:** Bold, italic, underline
+- **Cursor Control:** Positioning and clearing
+- **Progress Indicators:** Spinners and progress bars
+
+This means tools like npm, webpack, and Vite display properly formatted output with colors and animations.
+
+## Performance Optimizations
+
+### Incremental Updates
+
+Only new output is written to the terminal:
+
+```typescript
+const newData = output.slice(lastLengthRef.current);
+if (newData) {
+  terminalRef.current.write(newData);
+  lastLengthRef.current = output.length;
+}
+```
+
+### Deferred Rendering
+
+Initial fit is deferred to next animation frame:
+
+```typescript
+requestAnimationFrame(() => fitAddon.fit());
+```
+
+### Cleanup
+
+Proper disposal prevents memory leaks:
+
+```typescript
+return () => {
+  resizeObserver.disconnect();
+  terminal.dispose();
+  terminalRef.current = null;
+  fitAddonRef.current = null;
+};
+```
+
+## Limitations
+
+<Warning>
+The current implementation has some limitations:
+
+- **Read-only:** User input is disabled (`disableStdin: true`)
+- **No command history:** Previous commands cannot be recalled
+- **No interactive commands:** Commands requiring input will hang
+- **Single process:** Only displays output from install and dev commands
+</Warning>
+
+## Future Enhancements
+
+Potential improvements for the terminal:
+
+- Interactive shell with command input
+- Multiple terminal tabs
+- Command history and autocomplete
+- Copy/paste support
+- Search functionality
+- Custom keyboard shortcuts
+
+## Dependencies
+
+The terminal integration uses:
+
+- `@xterm/xterm` (v6.0.0) - Core terminal emulator
+- `@xterm/addon-fit` (v0.11.0) - Auto-sizing addon
+- React hooks for lifecycle management
+- WebContainer API for process output
+
+**Package.json:** `package.json:60-61`

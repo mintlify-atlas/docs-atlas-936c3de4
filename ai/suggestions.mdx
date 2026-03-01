@@ -1,0 +1,173 @@
+---
+title: Ghost Text Suggestions
+description: Get AI-powered code completions as you type with inline ghost text suggestions
+---
+
+Polaris provides intelligent code suggestions that appear as ghost text while you code. As you type, the AI analyzes your code context and suggests the next logical completion, helping you write code faster and more accurately.
+
+## How It Works
+
+The suggestion system uses CodeMirror's decoration API to display AI-generated completions as low-opacity text at your cursor position. The system:
+
+1. **Monitors your typing** - Triggers after 300ms of inactivity (debounced)
+2. **Analyzes context** - Sends your current line, surrounding code, and cursor position to the AI
+3. **Generates suggestions** - Claude 3.7 Sonnet predicts what you're likely to type next
+4. **Displays inline** - Shows the suggestion as ghost text at 40% opacity
+5. **Accepts with Tab** - Press Tab to insert the full suggestion
+
+<Note>
+Suggestions appear automatically as you type. No manual trigger is required.
+</Note>
+
+## Context Sent to AI
+
+When generating a suggestion, Polaris sends:
+
+- **File name** - Helps the AI understand the file type and purpose
+- **Current line** - The line where your cursor is positioned
+- **Text before cursor** - Everything typed on the current line up to the cursor
+- **Text after cursor** - Remaining text on the current line after the cursor
+- **Previous 5 lines** - Code context before the current line
+- **Next 5 lines** - Code context after the current line
+- **Full file content** - Complete code for broader context
+- **Line number** - Current position in the file
+
+This comprehensive context allows the AI to make intelligent predictions that fit naturally into your codebase.
+
+## Using Suggestions
+
+<Steps>
+  <Step title="Start typing">
+    Begin writing code in any file. The suggestion engine activates automatically.
+  </Step>
+  
+  <Step title="Wait briefly">
+    After 300ms of inactivity, ghost text appears showing the AI's suggestion.
+    
+    ```javascript
+    function calculateTotal(items) {
+      return items.reduce((sum, item) => sum + item.price, 0);
+                                                  // Ghost text appears here ↑
+    }
+    ```
+  </Step>
+  
+  <Step title="Accept or continue">
+    - **Press Tab** to accept and insert the entire suggestion
+    - **Keep typing** to ignore the suggestion and continue manually
+    - **Move your cursor** to dismiss the current suggestion
+  </Step>
+</Steps>
+
+## Smart Suggestion Logic
+
+The AI follows intelligent rules to avoid unhelpful suggestions:
+
+<Tabs>
+  <Tab title="Complete Statements">
+    If your line ends with a complete statement (`;`, `}`, `)`), no suggestion appears:
+    
+    ```javascript
+    const total = calculatePrice(); // ← No suggestion (complete statement)
+    ```
+  </Tab>
+  
+  <Tab title="Existing Code">
+    If the next lines already contain the code you'd type, the AI returns nothing to avoid duplication:
+    
+    ```javascript
+    function example() {
+      // Cursor here - no suggestion because the closing brace exists below
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Active Suggestions">
+    Suggestions appear for incomplete lines, mid-expression, or when starting new lines:
+    
+    ```javascript
+    const user = {
+      name: 'Alice',
+      // Cursor here - AI suggests: age: 25,
+    ```
+  </Tab>
+</Tabs>
+
+## Performance Features
+
+### Debouncing
+
+Suggestions are debounced to 300ms to prevent excessive API calls while you're actively typing. Each new keystroke resets the timer.
+
+### Request Cancellation
+
+When a new suggestion request starts, any pending request is automatically cancelled using an `AbortController`. This ensures:
+
+- No wasted API calls for outdated contexts
+- Faster response times for your current position
+- Reduced server load
+
+### Visual Feedback
+
+Ghost text is styled with:
+
+- 40% opacity for clear visibility without distraction
+- `pointer-events: none` so it doesn't interfere with clicking or selection
+- Automatic positioning right after your cursor
+
+## Implementation Details
+
+<Note>
+Suggestions are powered by **Claude 3.7 Sonnet** via the `/api/suggestion` endpoint.
+</Note>
+
+The system is implemented in `/src/features/editor/extensions/suggestion/index.ts:1` using:
+
+- **StateField** - Stores the current suggestion text in editor state
+- **StateEffect** - Updates suggestion state on changes
+- **ViewPlugin** - Handles debouncing and API requests
+- **WidgetType** - Renders ghost text as a custom DOM element
+- **Keymap** - Binds Tab key to accept suggestions
+
+## Configuration
+
+| Setting | Value | Location |
+|---------|-------|----------|
+| Debounce delay | 300ms | `index.ts:56` |
+| Context lines (before) | 5 | `index.ts:68` |
+| Context lines (after) | 5 | `index.ts:75` |
+| Ghost text opacity | 0.4 | `index.ts:48` |
+| Accept key | Tab | `index.ts:200` |
+| Model | Claude 3.7 Sonnet | `route.ts:86` |
+| Timeout | 10 seconds | `fetcher.ts:34` |
+
+## Error Handling
+
+<Warning>
+If a suggestion request fails, the system:
+- Shows a toast notification: "Failed to fetch AI completion"
+- Returns `null` to clear any pending ghost text
+- Allows you to continue typing without interruption
+</Warning>
+
+Aborted requests (from new keystrokes) fail silently without showing errors.
+
+## Tips for Best Results
+
+1. **Pause briefly** - Give the AI 300ms to generate suggestions
+2. **Provide context** - The AI works better with well-structured surrounding code
+3. **Use descriptive names** - Variable and function names help the AI understand intent
+4. **Trust the suggestions** - The AI learns patterns from your codebase structure
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| Tab | Accept current suggestion |
+| Any key | Dismiss suggestion and type manually |
+| Arrow keys | Move cursor (dismisses suggestion) |
+
+## Related Features
+
+- [Quick Edit](/ai/quick-edit) - Edit selected code with natural language instructions
+- [Conversations](/ai/conversations) - Chat with AI about your entire project

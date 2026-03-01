@@ -1,0 +1,428 @@
+---
+title: GitHub Integration
+description: Import repositories from GitHub and export projects as new repositories
+---
+
+Polaris provides seamless GitHub integration for importing existing repositories and exporting projects to new GitHub repos. This feature requires a Pro plan and GitHub OAuth connection.
+
+## Overview
+
+The GitHub integration enables:
+
+- **Import:** Clone any GitHub repository into a Polaris project
+- **Export:** Push a Polaris project to a new GitHub repository
+- **Authentication:** OAuth integration via Clerk
+- **Background Jobs:** Asynchronous processing with Inngest
+
+<Warning>
+GitHub integration requires:
+- Pro plan subscription
+- GitHub account connected via OAuth
+- Valid GitHub access token
+</Warning>
+
+## Import Workflow
+
+Importing a GitHub repository creates a new Polaris project with all files and folders.
+
+### Step 1: Parse GitHub URL
+
+The API extracts the owner and repository name from the GitHub URL:
+
+```typescript
+function parseGitHubUrl(url: string) {
+  const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
+  if (!match) {
+    throw new Error("Invalid GitHub URL");
+  }
+
+  return { owner: match[1], repo: match[2].replace(/\.git$/, "") };
+}
+
+// Example:
+// "https://github.com/vercel/next.js"
+// → { owner: "vercel", repo: "next.js" }
+```
+
+**Source:** `src/app/api/github/import/route.ts:14-21`
+
+### Step 2: Trigger Import Job
+
+The API endpoint creates a new project and triggers an Inngest background job:
+
+```typescript
+const projectId = await convex.mutation(api.system.createProject, {
+  internalKey,
+  name: repo,
+  ownerId: userId,
+});
+
+const event = await inngest.send({
+  name: "github/import.repo",
+  data: {
+    owner,
+    repo,
+    projectId,
+    githubToken,
+  },
+});
+```
+
+**Source:** `src/app/api/github/import/route.ts:66-80`
+
+### Step 3: Fetch Repository Tree
+
+The Inngest job fetches the complete file tree from GitHub using the Git Trees API:
+
+```typescript
+const { data } = await octokit.rest.git.getTree({
+  owner,
+  repo,
+  tree_sha: "main",
+  recursive: "1",
+});
+```
+
+The job automatically falls back to the `master` branch if `main` doesn't exist.
+
+**Source:** `src/features/projects/inngest/import-github-repo.ts:57-78`
+
+### Step 4: Create Folder Structure
+
+Folders are sorted by depth and created hierarchically:
+
+<Steps>
+  <Step title="Sort folders by depth">
+    Ensures parent folders are created before children.
+    
+    ```typescript
+    const folders = tree.tree
+      .filter((item) => item.type === "tree" && item.path)
+      .sort((a, b) => {
+        const aDepth = a.path ? a.path.split("/").length : 0;
+        const bDepth = b.path ? b.path.split("/").length : 0;
+        return aDepth - bDepth;
+      });
+    ```
+  </Step>
+  
+  <Step title="Create each folder">
+    Track folder IDs in a map for parent references.
+    
+    ```typescript
+    const map: Record<string, Id<"files">> = {};
+    
+    for (const folder of folders) {
+      const pathParts = folder.path.split("/");
+      const name = pathParts.pop()!;
+      const parentPath = pathParts.join("/");
+      const parentId = parentPath ? map[parentPath] : undefined;
+      
+      const folderId = await convex.mutation(api.system.createFolder, {
+        internalKey,
+        projectId,
+        name,
+        parentId,
+      });
+      
+      map[folder.path] = folderId;
+    }
+    ```
+  </Step>
+</Steps>
+
+**Source:** `src/features/projects/inngest/import-github-repo.ts:83-118`
+
+### Step 5: Import Files
+
+Files are fetched as blobs and processed based on whether they're binary:
+
+```typescript
+for (const file of allFiles) {
+  const { data: blob } = await octokit.rest.git.getBlob({
+    owner,
+    repo,
+    file_sha: file.sha,
+  });
+
+  const buffer = Buffer.from(blob.content, "base64");
+  const isBinary = await isBinaryFile(buffer);
+
+  if (isBinary) {
+    // Upload to Convex storage
+    const uploadUrl = await convex.mutation(
+      api.system.generateUploadUrl,
+      { internalKey }
+    );
+
+    const { storageId } = await ky
+      .post(uploadUrl, {
+        headers: { "Content-Type": "application/octet-stream" },
+        body: buffer,
+      })
+      .json<{ storageId: Id<"_storage"> }>();
+
+    await convex.mutation(api.system.createBinaryFile, {
+      internalKey,
+      projectId,
+      name,
+      storageId,
+      parentId,
+    });
+  } else {
+    // Store as text content
+    const content = buffer.toString("utf-8");
+
+    await convex.mutation(api.system.createFile, {
+      internalKey,
+      projectId,
+      name,
+      content,
+      parentId,
+    });
+  }
+}
+```
+
+**Source:** `src/features/projects/inngest/import-github-repo.ts:125-181`
+
+<Note>
+Binary files (images, fonts, etc.) are stored in Convex storage and referenced by `storageId`, while text files are stored directly as content.
+</Note>
+
+## Export Workflow
+
+Exporting creates a new GitHub repository with all project files.
+
+### Step 1: Validate and Authenticate
+
+The export API validates the request and retrieves the GitHub token:
+
+```typescript
+const requestSchema = z.object({
+  projectId: z.string(),
+  repoName: z.string().min(1).max(100),
+  visibility: z.enum(["public", "private"]).default("private"),
+  description: z.string().max(350).optional(),
+});
+
+const { projectId, repoName, visibility, description } = requestSchema.parse(body);
+
+const client = await clerkClient();
+const tokens = await client.users.getUserOauthAccessToken(userId, "github");
+const githubToken = tokens.data[0]?.token;
+```
+
+**Source:** `src/app/api/github/export/route.ts:9-34`
+
+### Step 2: Create Repository
+
+The Inngest job creates a new GitHub repository with auto-initialization:
+
+```typescript
+const { data: repo } = await octokit.rest.repos.createForAuthenticatedUser({
+  name: repoName,
+  description: description || `Exported from Polaris`,
+  private: visibility === "private",
+  auto_init: true,
+});
+
+// Wait for GitHub to initialize the repo
+await step.sleep("wait-for-repo-init", "3s");
+```
+
+**Source:** `src/features/projects/inngest/export-to-github.ts:81-91`
+
+<Warning>
+The job waits 3 seconds after repository creation because GitHub's `auto_init` is asynchronous. This ensures the initial commit exists before proceeding.
+</Warning>
+
+### Step 3: Build File Paths
+
+Convert the flat file structure to full paths:
+
+```typescript
+const buildFilePaths = (files: FileWithUrl[]) => {
+  const fileMap = new Map<Id<"files">, FileWithUrl>();
+  files.forEach((f) => fileMap.set(f._id, f));
+
+  const getFullPath = (file: FileWithUrl): string => {
+    if (!file.parentId) {
+      return file.name;
+    }
+
+    const parent = fileMap.get(file.parentId);
+    if (!parent) {
+      return file.name;
+    }
+
+    return `${getFullPath(parent)}/${file.name}`;
+  };
+
+  const paths: Record<string, FileWithUrl> = {};
+  files.forEach((file) => {
+    paths[getFullPath(file)] = file;
+  });
+
+  return paths;
+};
+```
+
+**Source:** `src/features/projects/inngest/export-to-github.ts:112-136`
+
+### Step 4: Create Git Blobs
+
+Each file is uploaded as a Git blob:
+
+<CodeGroup>
+```typescript Text Files
+const { data: blob } = await octokit.rest.git.createBlob({
+  owner: user.login,
+  repo: repoName,
+  content: file.content,
+  encoding: "utf-8",
+});
+```
+
+```typescript Binary Files
+const response = await ky.get(file.storageUrl);
+const buffer = Buffer.from(await response.arrayBuffer());
+
+const { data: blob } = await octokit.rest.git.createBlob({
+  owner: user.login,
+  repo: repoName,
+  content: buffer.toString("base64"),
+  encoding: "base64",
+});
+```
+</CodeGroup>
+
+**Source:** `src/features/projects/inngest/export-to-github.ts:150-192`
+
+### Step 5: Create Git Tree and Commit
+
+The blobs are assembled into a Git tree and committed:
+
+```typescript
+// Create tree
+const { data: tree } = await octokit.rest.git.createTree({
+  owner: user.login,
+  repo: repoName,
+  tree: treeItems,
+});
+
+// Get initial commit SHA
+const { data: ref } = await octokit.rest.git.getRef({
+  owner: user.login,
+  repo: repoName,
+  ref: "heads/main",
+});
+const initialCommitSha = ref.object.sha;
+
+// Create commit
+const { data: commit } = await octokit.rest.git.createCommit({
+  owner: user.login,
+  repo: repoName,
+  message: "Initial commit from Polaris",
+  tree: tree.sha,
+  parents: [initialCommitSha],
+});
+
+// Update main branch
+await octokit.rest.git.updateRef({
+  owner: user.login,
+  repo: repoName,
+  ref: "heads/main",
+  sha: commit.sha,
+  force: true,
+});
+```
+
+**Source:** `src/features/projects/inngest/export-to-github.ts:199-227`
+
+## Job Cancellation
+
+Export jobs can be cancelled mid-process:
+
+```typescript
+export const exportToGithub = inngest.createFunction(
+  {
+    id: "export-to-github",
+    cancelOn: [
+      {
+        event: "github/export.cancel",
+        if: "event.data.projectId == async.data.projectId"
+      },
+    ],
+  },
+  // ...
+);
+```
+
+**Source:** `src/features/projects/inngest/export-to-github.ts:26-30`
+
+To cancel an export:
+
+```typescript
+await inngest.send({
+  name: "github/export.cancel",
+  data: { projectId },
+});
+```
+
+## Status Tracking
+
+Both import and export jobs update project status throughout the process:
+
+<Steps>
+  <Step title="idle">
+    No operation in progress
+  </Step>
+  
+  <Step title="exporting / importing">
+    Job is actively processing files
+  </Step>
+  
+  <Step title="completed">
+    Operation finished successfully. Export status includes `repoUrl`.
+  </Step>
+  
+  <Step title="failed">
+    Operation encountered an error
+  </Step>
+</Steps>
+
+## Error Handling
+
+Both workflows include comprehensive error handling:
+
+```typescript
+{
+  onFailure: async ({ event, step }) => {
+    const internalKey = process.env.POLARIS_CONVEX_INTERNAL_KEY;
+    if (!internalKey) return;
+
+    const { projectId } = event.data.event.data;
+
+    await step.run("set-failed-status", async () => {
+      await convex.mutation(api.system.updateImportStatus, {
+        internalKey,
+        projectId,
+        status: "failed",
+      });
+    });
+  },
+}
+```
+
+**Source:** `src/features/projects/inngest/import-github-repo.ts:22-35`
+
+## Dependencies
+
+GitHub integration uses:
+
+- `octokit` (v5.0.5) - GitHub REST API client
+- `inngest` (v3.49.3) - Background job processing
+- `@clerk/nextjs` (v6.36.5) - OAuth and authentication
+- `isbinaryfile` (v5.0.7) - Binary file detection
+- `ky` (v1.14.2) - HTTP client for file uploads

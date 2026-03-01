@@ -1,0 +1,208 @@
+---
+title: 'POST /api/suggestion'
+description: 'Get AI-powered code completions at the cursor position'
+---
+
+## Endpoint
+
+```
+POST /api/suggestion
+```
+
+Generates intelligent code suggestions based on the current cursor position, surrounding code context, and file content. Uses Claude 3.7 Sonnet to provide contextually relevant completions.
+
+## Authentication
+
+Requires a valid Clerk session token. See [Authentication](/api/overview#authentication) for details.
+
+## Request Body
+
+<ParamField body="fileName" type="string" required>
+  The name of the file being edited (e.g., `index.ts`, `App.tsx`).
+</ParamField>
+
+<ParamField body="code" type="string" required>
+  The complete code content of the file.
+</ParamField>
+
+<ParamField body="currentLine" type="string" required>
+  The current line where the cursor is positioned.
+</ParamField>
+
+<ParamField body="lineNumber" type="number" required>
+  The line number where the cursor is positioned (1-indexed).
+</ParamField>
+
+<ParamField body="textBeforeCursor" type="string" required>
+  The text on the current line before the cursor position.
+</ParamField>
+
+<ParamField body="textAfterCursor" type="string" required>
+  The text on the current line after the cursor position.
+</ParamField>
+
+<ParamField body="previousLines" type="string">
+  Lines of code appearing before the current line. Can be empty string.
+</ParamField>
+
+<ParamField body="nextLines" type="string">
+  Lines of code appearing after the current line. Can be empty string.
+</ParamField>
+
+## Response
+
+<ResponseField name="suggestion" type="string">
+  The code to insert at the cursor position. Returns an empty string if no completion is needed or if the code is already complete.
+</ResponseField>
+
+## Request Example
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('/api/suggestion', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    fileName: 'utils.ts',
+    code: 'function calculateTotal(items) {\n  return items.\n}',
+    currentLine: '  return items.',
+    lineNumber: 2,
+    textBeforeCursor: '  return items.',
+    textAfterCursor: '',
+    previousLines: 'function calculateTotal(items) {',
+    nextLines: '}'
+  })
+});
+
+const data = await response.json();
+console.log(data.suggestion);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-instance.com/api/suggestion',
+    json={
+        'fileName': 'utils.ts',
+        'code': 'function calculateTotal(items) {\\n  return items.\\n}',
+        'currentLine': '  return items.',
+        'lineNumber': 2,
+        'textBeforeCursor': '  return items.',
+        'textAfterCursor': '',
+        'previousLines': 'function calculateTotal(items) {',
+        'nextLines': '}'
+    }
+)
+
+data = response.json()
+print(data['suggestion'])
+```
+
+```bash cURL
+curl -X POST https://your-instance.com/api/suggestion \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fileName": "utils.ts",
+    "code": "function calculateTotal(items) {\n  return items.\n}",
+    "currentLine": "  return items.",
+    "lineNumber": 2,
+    "textBeforeCursor": "  return items.",
+    "textAfterCursor": "",
+    "previousLines": "function calculateTotal(items) {",
+    "nextLines": "}"
+  }'
+```
+</CodeGroup>
+
+## Response Example
+
+<CodeGroup>
+```json 200 Success
+{
+  "suggestion": "reduce((sum, item) => sum + item.price, 0)"
+}
+```
+
+```json 200 No Suggestion
+{
+  "suggestion": ""
+}
+```
+
+```json 400 Bad Request
+{
+  "error": "Code is required"
+}
+```
+
+```json 403 Unauthorized
+{
+  "error": "Unauthorized"
+}
+```
+
+```json 500 Internal Error
+{
+  "error": "Failed to generate suggestion"
+}
+```
+</CodeGroup>
+
+## AI Model
+
+This endpoint uses **Claude 3.7 Sonnet** (`claude-3-7-sonnet-20250219`) with structured output to ensure consistent suggestion formatting.
+
+## Suggestion Logic
+
+The AI follows a specific decision tree:
+
+1. **Check Next Lines**: If `nextLines` contains code that continues from the cursor, returns empty string (code already exists)
+2. **Check Completeness**: If `textBeforeCursor` ends with a complete statement (`;`, `}`, `)`), returns empty string
+3. **Generate Suggestion**: Only if the above conditions don't apply, generates a contextual completion
+
+### When Suggestions Are Empty
+
+The endpoint returns an empty `suggestion` when:
+
+- The code is already written in the following lines
+- The current statement is already complete
+- No meaningful completion can be suggested
+
+## Context Usage
+
+The AI analyzes multiple context layers:
+
+- **File Context**: Full code content and file name
+- **Local Context**: Current line, previous lines, and next lines
+- **Cursor Context**: Text immediately before and after cursor
+- **Structural Context**: Line numbers for precise positioning
+
+This comprehensive context ensures suggestions are:
+- Syntactically correct
+- Contextually appropriate
+- Consistent with existing code style
+- Non-redundant with existing code
+
+## Error Responses
+
+<ResponseField name="error" type="string">
+  Description of the error that occurred.
+</ResponseField>
+
+### Common Errors
+
+| Status Code | Error | Description |
+|-------------|-------|-------------|
+| 400 | Code is required | The `code` parameter is missing or empty |
+| 403 | Unauthorized | Missing or invalid authentication token |
+| 500 | Failed to generate suggestion | AI model error or internal server issue |
+
+## Performance Notes
+
+- Average response time: 500-2000ms depending on code complexity
+- Suggestions are generated synchronously
+- Consider implementing client-side debouncing for real-time suggestions
+- Cache suggestions when cursor position hasn't changed

@@ -1,0 +1,231 @@
+---
+title: 'POST /api/quick-edit'
+description: 'Edit selected code using natural language instructions'
+---
+
+## Endpoint
+
+```
+POST /api/quick-edit
+```
+
+Edits a selected code block based on natural language instructions. Supports URL-based documentation fetching to provide additional context for the edit. Uses Claude 3.7 Sonnet to generate precise code modifications.
+
+## Authentication
+
+Requires a valid Clerk session token. See [Authentication](/api/overview#authentication) for details.
+
+## Request Body
+
+<ParamField body="selectedCode" type="string" required>
+  The code block to edit. This is the text currently selected in the editor.
+</ParamField>
+
+<ParamField body="instruction" type="string" required>
+  Natural language instruction describing the desired changes. Can include URLs for documentation reference.
+</ParamField>
+
+<ParamField body="fullCode" type="string">
+  The complete file content for additional context. Optional but recommended for better results.
+</ParamField>
+
+## Response
+
+<ResponseField name="editedCode" type="string">
+  The modified version of the selected code based on the instruction. Maintains the same indentation level as the original.
+</ResponseField>
+
+## Request Example
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('/api/quick-edit', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    selectedCode: 'function login(username, password) {\n  return db.query(username, password);\n}',
+    instruction: 'Add try-catch error handling and hash the password',
+    fullCode: 'const db = require("./db");\n\nfunction login(username, password) {\n  return db.query(username, password);\n}'
+  })
+});
+
+const data = await response.json();
+console.log(data.editedCode);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-instance.com/api/quick-edit',
+    json={
+        'selectedCode': 'function login(username, password) {\\n  return db.query(username, password);\\n}',
+        'instruction': 'Add try-catch error handling and hash the password',
+        'fullCode': 'const db = require("./db");\\n\\nfunction login(username, password) {\\n  return db.query(username, password);\\n}'
+    }
+)
+
+data = response.json()
+print(data['editedCode'])
+```
+
+```bash cURL
+curl -X POST https://your-instance.com/api/quick-edit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "selectedCode": "function login(username, password) {\n  return db.query(username, password);\n}",
+    "instruction": "Add try-catch error handling and hash the password",
+    "fullCode": "const db = require(\"./db\");\n\nfunction login(username, password) {\n  return db.query(username, password);\n}"
+  }'
+```
+</CodeGroup>
+
+## Response Example
+
+<CodeGroup>
+```json 200 Success
+{
+  "editedCode": "async function login(username, password) {\n  try {\n    const hashedPassword = await bcrypt.hash(password, 10);\n    return await db.query(username, hashedPassword);\n  } catch (error) {\n    console.error('Login failed:', error);\n    throw new Error('Authentication failed');\n  }\n}"
+}
+```
+
+```json 400 Missing Selected Code
+{
+  "error": "Selected code is required"
+}
+```
+
+```json 400 Missing Instruction
+{
+  "error": "Instruction is required"
+}
+```
+
+```json 400 Unauthorized
+{
+  "error": "Unauthorized"
+}
+```
+
+```json 500 Internal Error
+{
+  "error": "Failed to generate edit"
+}
+```
+</CodeGroup>
+
+## Documentation Fetching
+
+The endpoint automatically detects URLs in the instruction and fetches their documentation content to provide additional context.
+
+### URL Detection
+
+URLs are detected using the regex pattern: `/https?:\/\/[^\s)>\]]+/g`
+
+### Example with URL
+
+```json
+{
+  "selectedCode": "const app = express();",
+  "instruction": "Add middleware following best practices from https://expressjs.com/en/guide/using-middleware.html",
+  "fullCode": "const express = require('express');\nconst app = express();"
+}
+```
+
+The endpoint will:
+1. Extract the URL from the instruction
+2. Use Firecrawl to scrape the documentation in Markdown format
+3. Include the scraped content in the AI prompt for better context
+4. Generate code that follows the referenced documentation
+
+### Supported URL Formats
+
+- HTTP and HTTPS URLs
+- Documentation sites
+- GitHub repositories
+- API references
+- Blog posts and tutorials
+
+URLs are scraped using [Firecrawl](https://firecrawl.dev) and converted to Markdown for optimal AI processing.
+
+## AI Model
+
+This endpoint uses **Claude 3.7 Sonnet** (`claude-3-7-sonnet-20250219`) with structured output to ensure the response contains only the edited code.
+
+## Edit Guidelines
+
+The AI follows these principles:
+
+<AccordionGroup>
+  <Accordion title="Preserve Indentation">
+    The edited code maintains the same indentation level as the original selected code.
+  </Accordion>
+  
+  <Accordion title="Code Only">
+    Returns only the edited code without explanations or comments (unless specifically requested in the instruction).
+  </Accordion>
+  
+  <Accordion title="Context Awareness">
+    Uses the full code context to ensure edits are compatible with the rest of the file.
+  </Accordion>
+  
+  <Accordion title="Instruction Clarity">
+    If the instruction is unclear or cannot be applied, returns the original code unchanged.
+  </Accordion>
+</AccordionGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Refactoring" icon="arrows-rotate">
+    "Convert this to use async/await"
+  </Card>
+  <Card title="Error Handling" icon="shield-halved">
+    "Add try-catch blocks"
+  </Card>
+  <Card title="Documentation" icon="book">
+    "Add JSDoc comments"
+  </Card>
+  <Card title="Type Safety" icon="check">
+    "Add TypeScript types"
+  </Card>
+  <Card title="Optimization" icon="gauge-high">
+    "Optimize for performance"
+  </Card>
+  <Card title="Best Practices" icon="star">
+    "Follow React best practices"
+  </Card>
+</CardGroup>
+
+## Error Responses
+
+<ResponseField name="error" type="string">
+  Description of the error that occurred.
+</ResponseField>
+
+### Common Errors
+
+| Status Code | Error | Description |
+|-------------|-------|-------------|
+| 400 | Selected code is required | The `selectedCode` parameter is missing or empty |
+| 400 | Instruction is required | The `instruction` parameter is missing or empty |
+| 400 | Unauthorized | Missing or invalid authentication token |
+| 500 | Failed to generate edit | AI model error, documentation fetch failure, or internal server issue |
+
+## Performance Notes
+
+- Average response time: 1-3 seconds without URL fetching
+- With URL fetching: 3-8 seconds depending on documentation size
+- Multiple URLs are fetched in parallel
+- Failed URL fetches are silently ignored (edit continues without that documentation)
+- Response time increases with larger code selections and context
+
+## Best Practices
+
+1. **Provide Full Context**: Include `fullCode` for better awareness of imports and dependencies
+2. **Clear Instructions**: Be specific about the desired changes
+3. **Reference Documentation**: Include URLs when following specific patterns or frameworks
+4. **Reasonable Selections**: Select complete functions or logical blocks for best results
+5. **Verify Output**: Always review the edited code before applying

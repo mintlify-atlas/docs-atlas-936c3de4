@@ -1,0 +1,278 @@
+---
+title: File Management
+description: Navigate and manage your project files with an intuitive file explorer
+---
+
+Polaris provides a comprehensive file explorer that makes it easy to navigate, create, edit, and organize your project files and folders.
+
+## File Explorer Overview
+
+The file explorer is located on the left sidebar and displays your project's file structure in a tree view.
+
+### Explorer Components
+
+- **Project header** - Shows project name and quick action buttons
+- **Tree view** - Hierarchical display of files and folders
+- **File icons** - Visual indicators for different file types
+- **Folder icons** - Distinct icons for directories
+- **Collapse/expand controls** - Chevron icons for navigation
+
+<Note>
+  Files and folders are automatically sorted with folders first, then files, both in alphabetical order.
+</Note>
+
+## Creating Files and Folders
+
+### Quick Creation from Project Header
+
+Hover over the project name to reveal action buttons:
+
+<Steps>
+  <Step title="Hover over project name">
+    Quick action buttons appear on the right side of the project header
+  </Step>
+  
+  <Step title="Choose action">
+    - **File+** icon - Creates a new file in the project root
+    - **Folder+** icon - Creates a new folder in the project root
+  </Step>
+  
+  <Step title="Enter name">
+    Type the file or folder name in the inline input that appears
+  </Step>
+  
+  <Step title="Confirm">
+    Press `Enter` to create, or `Escape` to cancel
+  </Step>
+</Steps>
+
+### Context Menu Creation
+
+Create files and folders inside specific directories:
+
+<Steps>
+  <Step title="Right-click a folder">
+    Opens the context menu with available actions
+  </Step>
+  
+  <Step title="Select action">
+    Choose "New File" or "New Folder" from the menu
+  </Step>
+  
+  <Step title="Name your item">
+    Enter the name with appropriate extension (for files)
+  </Step>
+  
+  <Step title="Confirm creation">
+    Press `Enter` to create, or `Escape` to cancel
+  </Step>
+</Steps>
+
+<Tip>
+  Files are created with empty content by default. You can immediately start editing after creation.
+</Tip>
+
+## File Navigation
+
+### Opening Files
+
+Two ways to open files in the editor:
+
+**Preview Mode (Single-click):**
+
+- Click once on a file name
+- Opens in a preview tab (italicized name)
+- Clicking another file replaces the preview
+- Perfect for quick browsing
+
+**Pinned Mode (Double-click):**
+
+- Double-click a file name
+- Opens in a permanent tab (normal name)
+- Stays open when clicking other files
+- Use for files you're actively editing
+
+<Note>
+  Preview tabs are shown in italic text, while pinned tabs use regular text. You can convert a preview to pinned by double-clicking its tab.
+</Note>
+
+### Folder Navigation
+
+- **Click folder name** to expand/collapse
+- **Chevron icon** rotates to indicate state:
+  - Right-pointing: Collapsed
+  - Down-pointing: Expanded
+- Nested folders indent further right
+- Folders load contents on-demand when expanded
+
+## File Operations
+
+### Renaming Files and Folders
+
+<Steps>
+  <Step title="Access rename">
+    Right-click the file or folder and select "Rename"
+  </Step>
+  
+  <Step title="Edit name">
+    An inline input appears with the current name selected
+  </Step>
+  
+  <Step title="Submit changes">
+    Press `Enter` to save the new name, or `Escape` to cancel
+  </Step>
+</Steps>
+
+<Warning>
+  Renaming a file changes its name but doesn't automatically update import statements in other files. You may need to update references manually.
+</Warning>
+
+### Deleting Files and Folders
+
+<Steps>
+  <Step title="Right-click item">
+    Open the context menu on the file or folder
+  </Step>
+  
+  <Step title="Select delete">
+    Click "Delete" from the menu options
+  </Step>
+  
+  <Step title="Confirm deletion">
+    The item is removed immediately
+  </Step>
+</Steps>
+
+<Warning>
+  Deletion is immediate and cannot be undone. Deleting a folder removes all its contents recursively.
+</Warning>
+
+### Context Menu Actions
+
+Right-click any file or folder to access:
+
+**For Files:**
+- Rename
+- Delete
+
+**For Folders:**
+- Rename
+- Delete
+- New File
+- New Folder
+
+## Project Header Actions
+
+The project header includes several utility buttons:
+
+<CardGroup cols={3}>
+  <Card title="New File" icon="file-plus">
+    Create a new file in the root directory
+  </Card>
+  
+  <Card title="New Folder" icon="folder-plus">
+    Create a new folder in the root directory
+  </Card>
+  
+  <Card title="Collapse All" icon="minimize">
+    Collapse all expanded folders at once for a cleaner view
+  </Card>
+</CardGroup>
+
+<Tip>
+  Use "Collapse All" when your file tree gets cluttered. It folds all expanded folders back to the root level.
+</Tip>
+
+## File Icons
+
+The explorer displays contextual icons for different file types:
+
+- **JavaScript** (.js, .jsx) - Yellow/gold icon
+- **TypeScript** (.ts, .tsx) - Blue icon
+- **HTML** (.html) - Orange icon
+- **CSS** (.css) - Blue/cyan icon
+- **JSON** (.json) - Green icon
+- **Markdown** (.md, .mdx) - Gray icon
+- **Python** (.py) - Blue/yellow icon
+- **Folders** - Dynamic folder icon based on name
+- **Generic files** - Default file icon for unknown types
+
+<Note>
+  Icons are automatically assigned based on file extensions, making it easy to identify file types at a glance.
+</Note>
+
+## Visual States
+
+### Active File
+
+The currently open and focused file is highlighted:
+
+- Background color changes to indicate selection
+- File remains highlighted when viewing its tab
+- Only one file can be active at a time
+
+### Hover States
+
+- Files and folders highlight on hover
+- Context menu buttons appear on right-click
+- Project header buttons appear on project name hover
+
+### Loading States
+
+When expanding folders for the first time:
+
+- Loading indicator appears while fetching contents
+- Skeleton rows show temporarily
+- Content replaces loading state when ready
+
+## Optimistic Updates
+
+File operations feel instant because of optimistic updates:
+
+- **Create** - New files/folders appear immediately
+- **Rename** - Name changes instantly
+- **Delete** - Items disappear right away
+
+The UI updates optimistically, then syncs with the server in the background.
+
+<Tip>
+  If a network error occurs, the UI will revert to the actual server state and show an error notification.
+</Tip>
+
+## Keyboard Navigation
+
+| Action | Key |
+|--------|-----|
+| Rename file/folder | `F2` (via context menu) |
+| Confirm create/rename | `Enter` |
+| Cancel create/rename | `Escape` |
+| Close tab | Click X or open another preview |
+
+## File Explorer Tips
+
+<CardGroup cols={2}>
+  <Card title="Quick Preview" icon="eye">
+    Single-click files to preview without cluttering your tab bar
+  </Card>
+  
+  <Card title="Pin Important Files" icon="pin">
+    Double-click files you're actively working on to keep them open
+  </Card>
+  
+  <Card title="Use Folders" icon="folder">
+    Organize related files in folders for better project structure
+  </Card>
+  
+  <Card title="Collapse When Needed" icon="minimize">
+    Use the collapse all button to reset your view and reduce visual clutter
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Note>
+  - Maximum file name length is enforced by the system
+  - Special characters in file names may be restricted
+  - Folder deletion requires the folder to be empty (or deletes recursively)
+  - Binary files cannot be edited in the code editor
+</Note>

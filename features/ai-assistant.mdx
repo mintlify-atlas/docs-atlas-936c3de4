@@ -1,0 +1,298 @@
+---
+title: AI Assistant
+description: Conversational AI that helps you build, edit, and understand your code
+---
+
+Polaris includes a powerful AI assistant that can help you create files, modify code, debug issues, and answer questions about your project. The assistant appears in a sidebar and has full access to your project files.
+
+## Getting Started
+
+### Starting a Conversation
+
+The AI assistant sidebar is located on the right side of your project workspace:
+
+<Steps>
+  <Step title="Open your project">
+    Navigate to any project to see the conversation sidebar
+  </Step>
+  
+  <Step title="Type your message">
+    Use the input field at the bottom: "Ask Polaris anything..."
+  </Step>
+  
+  <Step title="Send your request">
+    Press Enter or click the send button to submit your message
+  </Step>
+</Steps>
+
+<Note>
+  Your first message automatically creates a new conversation. The AI will start processing your request immediately.
+</Note>
+
+## Conversation Features
+
+### Multiple Conversations
+
+Manage multiple conversation threads for different tasks:
+
+**Create a new conversation:**
+
+- Click the **+** (plus) icon in the conversation header
+- Start fresh while keeping previous conversations accessible
+
+**Switch between conversations:**
+
+- Click the **History** icon (clock) in the conversation header
+- Browse all past conversations for the current project
+- Select any conversation to continue where you left off
+
+<Tip>
+  Each project has its own set of conversations, keeping your work organized by context.
+</Tip>
+
+### Conversation Management
+
+The conversation sidebar includes:
+
+- **Conversation title** - Displayed at the top (defaults to "New Conversation")
+- **History button** - Access past conversations
+- **New conversation button** - Start a fresh thread
+- **Auto-scroll** - Automatically scrolls to latest messages
+- **Scroll to bottom button** - Appears when manually scrolled up
+
+### Message Actions
+
+For assistant responses, you can:
+
+- **Copy message** - Copy the response text to clipboard (last message only)
+- View message status:
+  - **Thinking...** - AI is processing your request
+  - **Request cancelled** - You stopped the generation
+  - Completed messages show full content
+
+## AI Capabilities
+
+The AI assistant has access to powerful tools to modify your project:
+
+### File Operations
+
+<AccordionGroup>
+  <Accordion title="Create Files">
+    Ask the AI to create new files with specific content:
+    
+    ```
+    Create a React component called Button with primary and secondary variants
+    ```
+    
+    The AI will:
+    - Choose the appropriate filename and extension
+    - Write the file content
+    - Place it in the correct directory
+    - Create multiple related files if needed
+  </Accordion>
+
+  <Accordion title="Update Files">
+    Request modifications to existing files:
+    
+    ```
+    Add error handling to the API fetch in utils.js
+    ```
+    
+    The AI will:
+    - Read the current file content
+    - Make targeted changes
+    - Preserve existing code structure
+    - Update the file in place
+  </Accordion>
+
+  <Accordion title="Read Files">
+    Ask about file contents:
+    
+    ```
+    What does the authentication logic in auth.ts do?
+    ```
+    
+    The AI will:
+    - Read the specified file
+    - Analyze the code
+    - Explain functionality in natural language
+  </Accordion>
+
+  <Accordion title="List Files">
+    Query your project structure:
+    
+    ```
+    Show me all the React components in the project
+    ```
+    
+    The AI will:
+    - List relevant files and folders
+    - Organize results by directory
+    - Provide file paths and types
+  </Accordion>
+
+  <Accordion title="Delete Files">
+    Remove unwanted files:
+    
+    ```
+    Delete the old test files we don't need anymore
+    ```
+    
+    The AI will:
+    - Identify files matching your description
+    - Remove them from the project
+    - Confirm what was deleted
+  </Accordion>
+
+  <Accordion title="Rename Files">
+    Change file names:
+    
+    ```
+    Rename Button.js to PrimaryButton.js
+    ```
+    
+    The AI will:
+    - Update the file name
+    - Preserve file content and location
+    - Maintain references (where possible)
+  </Accordion>
+
+  <Accordion title="Create Folders">
+    Organize with new directories:
+    
+    ```
+    Create a components folder for all my React components
+    ```
+    
+    The AI will:
+    - Create the folder structure
+    - Place it in the appropriate location
+    - Can create nested folders
+  </Accordion>
+</AccordionGroup>
+
+### Web Research
+
+<Accordion title="Scrape URLs">
+  The AI can fetch content from web pages:
+  
+  ```
+  Read the documentation from https://example.com/api-docs and implement their authentication
+  ```
+  
+  The AI will:
+  - Fetch content from the URL
+  - Extract relevant information
+  - Apply knowledge to your project
+  - Reference multiple URLs in one request
+</Accordion>
+
+## Example Prompts
+
+Here are effective ways to use the AI assistant:
+
+### Creating New Features
+
+```
+Create a contact form with name, email, and message fields. Include validation and a submit handler.
+```
+
+### Debugging
+
+```
+Why is my API call failing? Check the fetch function in api.ts
+```
+
+### Code Improvements
+
+```
+Refactor the user authentication code to use modern best practices
+```
+
+### Learning
+
+```
+Explain how the state management works in App.tsx
+```
+
+### Project Setup
+
+```
+Set up a basic Express server with CORS and environment variables
+```
+
+<Tip>
+  Be specific in your requests. Include file names, describe desired functionality, and mention any constraints or preferences.
+</Tip>
+
+## Processing Control
+
+### Cancel Requests
+
+If the AI is taking too long or you want to change direction:
+
+<Steps>
+  <Step title="Wait for processing">
+    Look for the "Thinking..." indicator with spinning icon
+  </Step>
+  
+  <Step title="Click stop button">
+    The submit button changes to a stop icon during processing
+  </Step>
+  
+  <Step title="Confirm cancellation">
+    The message will show "Request cancelled" status
+  </Step>
+</Steps>
+
+<Note>
+  Cancelled requests won't make any changes to your files. You can immediately start a new request.
+</Note>
+
+## Message Format
+
+Assistant responses support:
+
+- **Markdown formatting** - Bold, italic, code blocks, lists
+- **Code syntax highlighting** - Inline and block code
+- **Links** - Clickable URLs
+- **Structured information** - Tables, nested lists
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Be Specific" icon="crosshairs">
+    Include file names, exact locations, and clear requirements for better results
+  </Card>
+  
+  <Card title="One Task at a Time" icon="list-check">
+    Break complex requests into smaller steps for more accurate execution
+  </Card>
+  
+  <Card title="Provide Context" icon="message-circle">
+    Mention related files, dependencies, or constraints the AI should consider
+  </Card>
+  
+  <Card title="Review Changes" icon="eye">
+    Always review AI-generated code before considering it complete
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+  The AI assistant:
+  - Cannot execute code or run commands
+  - Cannot access external services or APIs directly (but can read from URLs)
+  - Works with file content, not runtime behavior
+  - May need multiple iterations for complex changes
+</Warning>
+
+## Privacy
+
+All conversations and file operations are:
+
+- Scoped to the current project
+- Stored in your project database
+- Accessible only to you
+- Used to improve context for future requests in the same conversation

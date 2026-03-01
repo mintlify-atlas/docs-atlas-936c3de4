@@ -1,0 +1,180 @@
+---
+title: Clerk authentication
+description: Integrate Clerk for authentication with GitHub OAuth support
+---
+
+Clerk provides drop-in authentication for Polaris with GitHub OAuth, user management, and session handling.
+
+## Overview
+
+Polaris uses [Clerk](https://clerk.com) for authentication with the following features:
+
+- GitHub OAuth integration
+- User session management
+- Protected routes
+- Convex integration for user identity
+
+## Setup steps
+
+<Steps>
+  <Step title="Create a Clerk application">
+    1. Go to [clerk.com](https://clerk.com) and create an account
+    2. Create a new application
+    3. Choose **GitHub** as your authentication provider
+    4. Copy your publishable key and secret key
+  </Step>
+
+  <Step title="Configure environment variables">
+    Add your Clerk credentials to `.env.local`:
+
+    ```bash
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+    CLERK_SECRET_KEY=sk_test_...
+    ```
+  </Step>
+
+  <Step title="Install Clerk packages">
+    The required packages are already included in `package.json`:
+
+    ```json
+    {
+      "dependencies": {
+        "@clerk/nextjs": "^6.36.5",
+        "@clerk/themes": "^2.4.46"
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Set up the Clerk provider">
+    Clerk is configured in `src/app/layout.tsx` to wrap your entire app:
+
+    ```typescript
+    import { ClerkProvider } from '@clerk/nextjs';
+    import { dark } from '@clerk/themes';
+
+    export default function RootLayout({
+      children,
+    }: Readonly<{
+      children: React.ReactNode;
+    }>) {
+      return (
+        <ClerkProvider
+          appearance={{
+            baseTheme: dark,
+          }}
+        >
+          <ConvexClientProvider>
+            {children}
+          </ConvexClientProvider>
+        </ClerkProvider>
+      );
+    }
+    ```
+  </Step>
+</Steps>
+
+## Convex integration
+
+Clerk integrates with Convex to provide user identity in backend queries and mutations.
+
+### Configuration
+
+The Convex auth configuration is in `convex/auth.config.ts`:
+
+```typescript
+export default {
+  providers: [
+    {
+      domain: process.env.CLERK_JWT_ISSUER_DOMAIN,
+      applicationID: "convex",
+    },
+  ],
+};
+```
+
+### Getting user identity
+
+In Convex functions, access the authenticated user:
+
+```typescript
+import { mutation, query } from "./_generated/server";
+
+export const myQuery = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthenticated");
+    }
+    
+    // Use identity.subject as the user ID
+    const userId = identity.subject;
+    
+    // Query user-specific data
+    return await ctx.db
+      .query("projects")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .collect();
+  },
+});
+```
+
+## Protected routes
+
+Polaris uses Clerk middleware to protect routes. Only authenticated users can access the `/projects` routes.
+
+## Authentication flow
+
+1. User visits Polaris
+2. If not authenticated, Clerk shows the sign-in UI
+3. User clicks "Sign in with GitHub"
+4. GitHub OAuth flow completes
+5. Clerk creates a session
+6. User is redirected to the projects dashboard
+7. Session token is passed to Convex for backend authentication
+
+## Customization
+
+Polaris uses the dark theme from `@clerk/themes`:
+
+```typescript
+import { dark } from '@clerk/themes';
+
+<ClerkProvider
+  appearance={{
+    baseTheme: dark,
+  }}
+>
+```
+
+You can customize further by adding `variables` to the appearance object.
+
+## Testing
+
+1. Start your development server
+2. Visit `http://localhost:3000`
+3. You should see the Clerk sign-in UI
+4. Sign in with your GitHub account
+5. Verify you're redirected to `/projects`
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Invalid publishable key error">
+    Verify your `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is correct and starts with `pk_test_` or `pk_live_`.
+  </Accordion>
+
+  <Accordion title="GitHub OAuth not working">
+    Make sure GitHub is enabled in your Clerk dashboard under **Configure → SSO Connections → GitHub**.
+  </Accordion>
+
+  <Accordion title="Convex authentication failing">
+    Ensure your Convex deployment has the Clerk integration configured. Run `npx convex dev` and check the auth setup.
+  </Accordion>
+</AccordionGroup>
+
+## Learn more
+
+- [Clerk documentation](https://clerk.com/docs)
+- [Clerk + Convex guide](https://docs.convex.dev/auth/clerk)
+- [Next.js integration](https://clerk.com/docs/quickstarts/nextjs)

@@ -1,0 +1,164 @@
+---
+title: 'POST /api/messages'
+description: 'Send a message to the AI assistant and trigger code generation'
+---
+
+## Endpoint
+
+```
+POST /api/messages
+```
+
+Sends a user message to the AI assistant within a conversation and triggers asynchronous message processing. This endpoint creates both a user message and an assistant message placeholder, then dispatches the processing to a background job.
+
+## Authentication
+
+Requires a valid Clerk session token. See [Authentication](/api/overview#authentication) for details.
+
+## Request Body
+
+<ParamField body="conversationId" type="string" required>
+  The unique identifier of the conversation. Must be a valid Convex ID.
+</ParamField>
+
+<ParamField body="message" type="string" required>
+  The user's message content to send to the AI assistant.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the message was successfully queued for processing.
+</ResponseField>
+
+<ResponseField name="eventId" type="string">
+  The Inngest event ID for tracking the background processing job.
+</ResponseField>
+
+<ResponseField name="messageId" type="string">
+  The Convex ID of the created assistant message placeholder.
+</ResponseField>
+
+## Request Example
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('/api/messages', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    conversationId: 'k57abc123def456',
+    message: 'Add error handling to the user registration function'
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-instance.com/api/messages',
+    json={
+        'conversationId': 'k57abc123def456',
+        'message': 'Add error handling to the user registration function'
+    }
+)
+
+data = response.json()
+print(data)
+```
+
+```bash cURL
+curl -X POST https://your-instance.com/api/messages \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "k57abc123def456",
+    "message": "Add error handling to the user registration function"
+  }'
+```
+</CodeGroup>
+
+## Response Example
+
+<CodeGroup>
+```json 200 Success
+{
+  "success": true,
+  "eventId": "01HQXYZ789ABCDEF",
+  "messageId": "k58xyz789ghi012"
+}
+```
+
+```json 401 Unauthorized
+{
+  "error": "Unauthorized"
+}
+```
+
+```json 404 Not Found
+{
+  "error": "Conversation not found"
+}
+```
+
+```json 500 Internal Error
+{
+  "error": "Internal key not configured"
+}
+```
+</CodeGroup>
+
+## Behavior
+
+### Automatic Cancellation
+
+When a new message is sent, the endpoint automatically:
+
+1. Finds all processing messages in the same project
+2. Cancels those messages by sending `message/cancel` events
+3. Updates their status to `cancelled`
+
+This ensures only one message is being processed at a time per project.
+
+### Message Creation
+
+The endpoint creates two messages:
+
+1. **User Message**: Contains the user's input with role `user`
+2. **Assistant Message**: Empty placeholder with role `assistant` and status `processing`
+
+### Asynchronous Processing
+
+The actual AI response generation happens asynchronously:
+
+- An Inngest `message/sent` event is triggered
+- Background processing handles the AI generation
+- The assistant message is updated with the response
+- Status changes from `processing` to `completed` or `failed`
+
+## Error Responses
+
+<ResponseField name="error" type="string">
+  Description of the error that occurred.
+</ResponseField>
+
+### Common Errors
+
+| Status Code | Error | Description |
+|-------------|-------|-------------|
+| 401 | Unauthorized | Missing or invalid authentication token |
+| 404 | Conversation not found | The specified conversationId doesn't exist |
+| 500 | Internal key not configured | Server configuration error |
+
+## Notes
+
+- The response is returned immediately after queueing the message, not after AI generation completes
+- Use the returned `messageId` to subscribe to updates and receive the AI response
+- Messages are stored in Convex database
+- Background processing is handled by Inngest
+- Only one message per project can be processing at a time

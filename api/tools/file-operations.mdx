@@ -1,0 +1,466 @@
+---
+title: 'File Operations'
+description: 'Tools for managing files and folders in Polaris projects'
+---
+
+## Overview
+
+Polaris provides a comprehensive set of file operation tools that enable AI agents to create, read, update, delete, rename, and list files and folders within projects. These tools are designed to work efficiently with the file system through Convex backend operations.
+
+---
+
+## listFiles
+
+List all files and folders in the project. Returns a structured representation of the project's file system with IDs, names, types, and parent relationships.
+
+### Parameters
+
+This tool takes no parameters.
+
+### Response
+
+Returns a JSON array of file objects:
+
+<ResponseField name="id" type="string" required>
+  The unique identifier for the file or folder
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  The name of the file or folder
+</ResponseField>
+
+<ResponseField name="type" type="string" required>
+  Either `"file"` or `"folder"`
+</ResponseField>
+
+<ResponseField name="parentId" type="string | null" required>
+  The ID of the parent folder, or `null` for root-level items. Items with the same `parentId` are in the same folder.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```json Tool Call
+{
+  "name": "listFiles",
+  "parameters": {}
+}
+```
+
+```json Response
+[
+  {
+    "id": "k17abc123",
+    "name": "src",
+    "type": "folder",
+    "parentId": null
+  },
+  {
+    "id": "k17def456",
+    "name": "index.ts",
+    "type": "file",
+    "parentId": "k17abc123"
+  },
+  {
+    "id": "k17ghi789",
+    "name": "README.md",
+    "type": "file",
+    "parentId": null
+  }
+]
+```
+</CodeGroup>
+
+<Note>
+  Files and folders are sorted with folders first, then alphabetically by name.
+</Note>
+
+---
+
+## createFiles
+
+Create multiple files at once in the same parent folder. This is the most efficient way to batch create files that share the same parent directory.
+
+### Parameters
+
+<ParamField path="parentId" type="string" required>
+  The ID of the parent folder. Use an empty string `""` for root level. Must be a valid folder ID from `listFiles`.
+</ParamField>
+
+<ParamField path="files" type="array" required>
+  Array of file objects to create. Must contain at least one file.
+  
+  <ParamField path="files[].name" type="string" required>
+    The file name including extension (e.g., `"index.ts"`, `"README.md"`)
+  </ParamField>
+  
+  <ParamField path="files[].content" type="string" required>
+    The file content as a string
+  </ParamField>
+</ParamField>
+
+### Response
+
+Returns a success message listing created files and any failures:
+
+```
+Created 2 file(s): index.ts, styles.css
+```
+
+Or with partial failures:
+
+```
+Created 1 file(s): index.ts. Failed: styles.css (File already exists)
+```
+
+### Example
+
+<CodeGroup>
+```json Tool Call
+{
+  "name": "createFiles",
+  "parameters": {
+    "parentId": "k17abc123",
+    "files": [
+      {
+        "name": "index.ts",
+        "content": "export const greeting = 'Hello, Polaris!';"
+      },
+      {
+        "name": "types.ts",
+        "content": "export type User = { id: string; name: string; };"
+      }
+    ]
+  }
+}
+```
+
+```text Response
+Created 2 file(s): index.ts, types.ts
+```
+</CodeGroup>
+
+### Error Handling
+
+<Accordion title="Common Errors">
+  - **Parent folder not found**: `Error: Parent folder with ID "xyz" not found. Use listFiles to get valid folder IDs.`
+  - **Parent is a file**: `Error: The ID "xyz" is a file, not a folder. Use a folder ID as parentId.`
+  - **Invalid parent ID**: `Error: Invalid parentId "xyz". Use listFiles to get valid folder IDs, or use empty string for root level.`
+  - **Empty file name**: `Error: File name cannot be empty`
+  - **Empty array**: `Error: Provide at least one file to create`
+</Accordion>
+
+---
+
+## createFolder
+
+Create a new folder in the project.
+
+### Parameters
+
+<ParamField path="name" type="string" required>
+  The name of the folder to create
+</ParamField>
+
+<ParamField path="parentId" type="string" required>
+  The ID (not name!) of the parent folder from `listFiles`, or empty string `""` for root level
+</ParamField>
+
+### Response
+
+Returns the ID of the created folder:
+
+```
+Folder created with ID: k17xyz789
+```
+
+### Example
+
+<CodeGroup>
+```json Tool Call
+{
+  "name": "createFolder",
+  "parameters": {
+    "name": "components",
+    "parentId": "k17abc123"
+  }
+}
+```
+
+```text Response
+Folder created with ID: k17xyz789
+```
+</CodeGroup>
+
+### Error Handling
+
+<Accordion title="Common Errors">
+  - **Folder name required**: `Error: Folder name is required`
+  - **Parent folder not found**: `Error: Parent folder with ID "xyz" not found. Use listFiles to get valid folder IDs.`
+  - **Parent is a file**: `Error: The ID "xyz" is a file, not a folder. Use a folder ID as parentId.`
+  - **Invalid parent ID**: `Error: Invalid parentId "xyz". Use listFiles to get valid folder IDs, or use empty string for root level.`
+</Accordion>
+
+---
+
+## readFiles
+
+Read the content of one or more files from the project.
+
+### Parameters
+
+<ParamField path="fileIds" type="array" required>
+  Array of file IDs to read. Must contain at least one file ID.
+</ParamField>
+
+### Response
+
+Returns a JSON array of file objects with their contents:
+
+<ResponseField name="id" type="string" required>
+  The file ID
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  The file name
+</ResponseField>
+
+<ResponseField name="content" type="string" required>
+  The file content
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```json Tool Call
+{
+  "name": "readFiles",
+  "parameters": {
+    "fileIds": ["k17def456", "k17ghi789"]
+  }
+}
+```
+
+```json Response
+[
+  {
+    "id": "k17def456",
+    "name": "index.ts",
+    "content": "export const greeting = 'Hello, Polaris!';"
+  },
+  {
+    "id": "k17ghi789",
+    "name": "README.md",
+    "content": "# My Project\n\nWelcome to my project."
+  }
+]
+```
+</CodeGroup>
+
+### Error Handling
+
+<Accordion title="Common Errors">
+  - **No files found**: `Error: No files found with provided IDs. Use listFiles to get valid fileIDs.`
+  - **Empty file ID**: `Error: File ID cannot be empty`
+  - **Empty array**: `Error: Provide at least one file ID`
+</Accordion>
+
+<Note>
+  Files without content or that don't exist are silently skipped. If all provided IDs are invalid, you'll receive the "No files found" error.
+</Note>
+
+---
+
+## updateFile
+
+Update the content of an existing file.
+
+### Parameters
+
+<ParamField path="fileId" type="string" required>
+  The ID of the file to update
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  The new content for the file
+</ParamField>
+
+### Response
+
+Returns a success message with the file name:
+
+```
+File "index.ts" updated successfully
+```
+
+### Example
+
+<CodeGroup>
+```json Tool Call
+{
+  "name": "updateFile",
+  "parameters": {
+    "fileId": "k17def456",
+    "content": "export const greeting = 'Hello, World!';"
+  }
+}
+```
+
+```text Response
+File "index.ts" updated successfully
+```
+</CodeGroup>
+
+### Error Handling
+
+<Accordion title="Common Errors">
+  - **File not found**: `Error: File with ID "xyz" not found. Use listFiles to get valid file IDs.`
+  - **Target is a folder**: `Error: "xyz" is a folder, not a file. You can only update file contents.`
+  - **File ID required**: `Error: File ID is required`
+</Accordion>
+
+---
+
+## renameFile
+
+Rename a file or folder.
+
+### Parameters
+
+<ParamField path="fileId" type="string" required>
+  The ID of the file or folder to rename
+</ParamField>
+
+<ParamField path="newName" type="string" required>
+  The new name for the file or folder
+</ParamField>
+
+### Response
+
+Returns a success message showing the old and new names:
+
+```
+Renamed "old-name.ts" to "new-name.ts" successfully
+```
+
+### Example
+
+<CodeGroup>
+```json Tool Call
+{
+  "name": "renameFile",
+  "parameters": {
+    "fileId": "k17def456",
+    "newName": "main.ts"
+  }
+}
+```
+
+```text Response
+Renamed "index.ts" to "main.ts" successfully
+```
+</CodeGroup>
+
+### Error Handling
+
+<Accordion title="Common Errors">
+  - **File not found**: `Error: File with ID "xyz" not found. Use listFiles to get valid file IDs.`
+  - **File ID required**: `Error: File ID is required`
+  - **New name required**: `Error: New name is required`
+</Accordion>
+
+---
+
+## deleteFiles
+
+Delete one or more files or folders from the project. When deleting a folder, all contents are deleted recursively.
+
+### Parameters
+
+<ParamField path="fileIds" type="array" required>
+  Array of file or folder IDs to delete. Must contain at least one ID.
+</ParamField>
+
+### Response
+
+Returns a success message for each deleted item:
+
+```
+Deleted file "index.ts" successfully
+Deleted folder "components" successfully
+```
+
+### Example
+
+<CodeGroup>
+```json Tool Call
+{
+  "name": "deleteFiles",
+  "parameters": {
+    "fileIds": ["k17def456", "k17xyz789"]
+  }
+}
+```
+
+```text Response
+Deleted file "index.ts" successfully
+Deleted folder "old-components" successfully
+```
+</CodeGroup>
+
+### Error Handling
+
+<Accordion title="Common Errors">
+  - **File not found**: `Error: File with ID "xyz" not found. Use listFiles to get valid file IDs.`
+  - **Empty file ID**: `Error: File ID cannot be empty`
+  - **Empty array**: `Error: Provide at least one file ID`
+</Accordion>
+
+<Warning>
+  Deleting a folder will recursively delete all of its contents. This operation cannot be undone.
+</Warning>
+
+---
+
+## Best Practices
+
+### Efficient File Creation
+
+Always use `createFiles` (plural) instead of creating files one by one when creating multiple files in the same folder:
+
+<CodeGroup>
+```json Good - Batch Creation
+{
+  "name": "createFiles",
+  "parameters": {
+    "parentId": "k17abc123",
+    "files": [
+      { "name": "a.ts", "content": "..." },
+      { "name": "b.ts", "content": "..." },
+      { "name": "c.ts", "content": "..." }
+    ]
+  }
+}
+```
+
+```json Bad - Individual Creation
+// Don't do this - makes 3 separate tool calls
+{ "name": "createFiles", "parameters": { "parentId": "k17abc123", "files": [{ "name": "a.ts", "content": "..." }] } }
+{ "name": "createFiles", "parameters": { "parentId": "k17abc123", "files": [{ "name": "b.ts", "content": "..." }] } }
+{ "name": "createFiles", "parameters": { "parentId": "k17abc123", "files": [{ "name": "c.ts", "content": "..." }] } }
+```
+</CodeGroup>
+
+### Understanding File Structure
+
+Always call `listFiles` first to understand the project structure before performing operations:
+
+1. Call `listFiles` to get all file and folder IDs
+2. Use the `parentId` relationships to understand the folder hierarchy
+3. Use the correct IDs in subsequent operations
+
+### File IDs vs Names
+
+<Warning>
+  Most tools require file **IDs**, not file names. Always use `listFiles` to get the correct IDs before operating on files.
+</Warning>

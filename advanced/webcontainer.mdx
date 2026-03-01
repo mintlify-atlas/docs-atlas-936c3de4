@@ -1,0 +1,235 @@
+---
+title: WebContainer Integration
+description: Run Node.js applications directly in the browser with WebContainer API
+---
+
+Polaris uses [WebContainer API](https://webcontainers.io/) from StackBlitz to execute Node.js code directly in the browser. This enables real-time preview of web applications without requiring a backend server.
+
+## Overview
+
+WebContainer creates a full Node.js environment in the browser that can:
+
+- Install npm packages
+- Run build scripts and dev servers
+- Serve web applications with live preview
+- Execute shell commands
+- Hot-reload code changes
+
+<Note>
+WebContainer requires specific browser headers for security. Polaris uses `coep: "credentialless"` mode for Cross-Origin Embedder Policy compatibility.
+</Note>
+
+## Architecture
+
+The WebContainer implementation uses a singleton pattern to ensure only one instance runs at a time:
+
+```typescript
+// Singleton WebContainer instance
+let webcontainerInstance: WebContainer | null = null;
+let bootPromise: Promise<WebContainer> | null = null;
+
+const getWebContainer = async (): Promise<WebContainer> => {
+  if (webcontainerInstance) {
+    return webcontainerInstance;
+  }
+
+  if (!bootPromise) {
+    bootPromise = WebContainer.boot({ coep: "credentialless" });
+  }
+
+  webcontainerInstance = await bootPromise;
+  return webcontainerInstance;
+};
+```
+
+**Source:** `src/features/preview/hooks/use-webcontainer.ts:13-28`
+
+## Lifecycle Stages
+
+The WebContainer preview goes through several stages:
+
+<Steps>
+  <Step title="Booting">
+    Initialize the WebContainer instance and prepare the browser environment.
+  </Step>
+  
+  <Step title="Mounting">
+    Convert the flat file structure from Convex into a nested `FileSystemTree` and mount it to the container's filesystem.
+    
+    ```typescript
+    const fileTree = buildFileTree(files);
+    await container.mount(fileTree);
+    ```
+  </Step>
+  
+  <Step title="Installing">
+    Run the install command (default: `npm install`) to install dependencies.
+    
+    ```typescript
+    const installCmd = settings?.installCommand || "npm install";
+    const [installBin, ...installArgs] = installCmd.split(" ");
+    const installProcess = await container.spawn(installBin, installArgs);
+    ```
+  </Step>
+  
+  <Step title="Running">
+    Execute the dev command (default: `npm run dev`) and wait for the server to be ready.
+    
+    ```typescript
+    container.on("server-ready", (_port, url) => {
+      setPreviewUrl(url);
+      setStatus("running");
+    });
+    ```
+  </Step>
+</Steps>
+
+## File Tree Conversion
+
+Polaris stores files in a flat structure with parent references. The `buildFileTree` utility converts this into WebContainer's nested format:
+
+```typescript
+// Input: Flat file array with parentId references
+[
+  { _id: "1", name: "src", type: "folder", parentId: undefined },
+  { _id: "2", name: "index.js", type: "file", parentId: "1", content: "..." }
+]
+
+// Output: Nested FileSystemTree
+{
+  src: {
+    directory: {
+      "index.js": {
+        file: { contents: "..." }
+      }
+    }
+  }
+}
+```
+
+**Source:** `src/features/preview/utils/file-tree.ts:10-55`
+
+## Hot Reloading
+
+When files change in the editor, Polaris automatically syncs them to the WebContainer filesystem:
+
+```typescript
+useEffect(() => {
+  const container = containerRef.current;
+  if (!container || !files || status !== "running") return;
+
+  const filesMap = new Map(files.map((f) => [f._id, f]));
+
+  for (const file of files) {
+    if (file.type !== "file" || file.storageId || !file.content) continue;
+
+    const filePath = getFilePath(file, filesMap);
+    container.fs.writeFile(filePath, file.content);
+  }
+}, [files, status]);
+```
+
+**Source:** `src/features/preview/hooks/use-webcontainer.ts:145-157`
+
+<Warning>
+Binary files (with `storageId`) are not synced to WebContainer as they're stored separately in Convex storage.
+</Warning>
+
+## Process Management
+
+### Running Commands
+
+Use `container.spawn()` to execute commands:
+
+```typescript
+const process = await container.spawn("npm", ["run", "build"]);
+
+// Stream output
+process.output.pipeTo(
+  new WritableStream({
+    write(data) {
+      console.log(data);
+    },
+  })
+);
+
+// Wait for completion
+const exitCode = await process.exit;
+if (exitCode !== 0) {
+  throw new Error(`Command failed with code ${exitCode}`);
+}
+```
+
+### Listening for Servers
+
+WebContainer automatically detects when a dev server starts:
+
+```typescript
+container.on("server-ready", (port, url) => {
+  console.log(`Server running on port ${port}`);
+  console.log(`Preview URL: ${url}`);
+});
+```
+
+## Restart and Teardown
+
+To restart the WebContainer (useful when configuration changes):
+
+```typescript
+const teardownWebContainer = () => {
+  if (webcontainerInstance) {
+    webcontainerInstance.teardown();
+    webcontainerInstance = null;
+  }
+  bootPromise = null;
+};
+```
+
+**Source:** `src/features/preview/hooks/use-webcontainer.ts:30-36`
+
+## Custom Commands
+
+Users can configure custom install and dev commands in preview settings:
+
+<CodeGroup>
+```typescript Install Command
+{
+  installCommand: "pnpm install"
+}
+```
+
+```typescript Dev Command
+{
+  devCommand: "pnpm dev"
+}
+```
+
+```typescript Multiple Commands
+{
+  installCommand: "npm install",
+  devCommand: "npm run build && npm start"
+}
+```
+</CodeGroup>
+
+## Browser Compatibility
+
+WebContainer requires:
+
+- **SharedArrayBuffer** support
+- **Cross-Origin Isolation** headers
+- Modern browser (Chrome 84+, Edge 84+, Safari 15.2+)
+
+<Note>
+Polaris automatically handles the required headers using Next.js middleware configuration.
+</Note>
+
+## Dependencies
+
+WebContainer integration uses:
+
+- `@webcontainer/api` (v1.6.1) - Core WebContainer runtime
+- File tree utilities for format conversion
+- React hooks for lifecycle management
+
+**Package.json:** `package.json:59`

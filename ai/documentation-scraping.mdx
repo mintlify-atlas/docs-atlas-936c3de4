@@ -1,0 +1,385 @@
+---
+title: Documentation Scraping
+description: Teach the AI by sharing documentation URLs that get automatically scraped and used as context
+---
+
+Polaris integrates **Firecrawl** to scrape and extract content from documentation URLs. When you share a link in a Quick Edit instruction or AI conversation, the AI automatically fetches the page, converts it to markdown, and uses it as context for generating better, framework-specific code.
+
+## How It Works
+
+When you include a URL in your request:
+
+<Steps>
+  <Step title="URL detection">
+    The system detects HTTP/HTTPS URLs using regex pattern matching.
+  </Step>
+  
+  <Step title="Firecrawl scraping">
+    Each URL is sent to Firecrawl's scrape API with `formats: ["markdown"]` to extract clean, readable content.
+  </Step>
+  
+  <Step title="Context injection">
+    The scraped markdown is injected into the AI's prompt with the original URL for reference.
+  </Step>
+  
+  <Step title="AI generation">
+    The AI uses the documentation to generate code that follows the patterns and conventions from the docs.
+  </Step>
+</Steps>
+
+<Note>
+Documentation scraping works in both **Quick Edit** (Cmd+K) and **AI Conversations**.
+</Note>
+
+## Use Cases
+
+### Framework-Specific Code
+
+Teach the AI how to use specific framework features:
+
+```
+User: Convert this to a Next.js Server Action using https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions
+
+AI: *scrapes Next.js docs*
+    *learns Server Action pattern*
+    *generates compliant code*
+```
+
+### API Integration
+
+Provide API documentation for accurate integration:
+
+```
+User: Add Stripe checkout following https://docs.stripe.com/payments/checkout/how-checkout-works
+
+AI: *scrapes Stripe docs*
+    *understands the flow*
+    *creates checkout with correct parameters*
+```
+
+### Library Usage
+
+Reference specific library methods and patterns:
+
+```
+User: Use Zod validation based on https://zod.dev/?id=basic-usage
+
+AI: *scrapes Zod documentation*
+    *applies correct schema syntax*
+    *generates type-safe validation*
+```
+
+### UI Component Libraries
+
+Implement components following design system guidelines:
+
+```
+User: Create a button using https://ui.shadcn.com/docs/components/button
+
+AI: *scrapes shadcn/ui docs*
+    *follows component patterns*
+    *includes proper imports and variants*
+```
+
+## Quick Edit with Documentation
+
+In Quick Edit mode (`Cmd+K` on selected code), URLs in your instruction are automatically scraped:
+
+```javascript
+// Selected code:
+const response = await fetch('/api/data');
+
+// Instruction:
+// "add error handling using https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#checking_that_the_fetch_was_successful"
+
+// Result (uses MDN patterns):
+const response = await fetch('/api/data');
+if (!response.ok) {
+  throw new Error(`HTTP error! status: ${response.status}`);
+}
+const data = await response.json();
+```
+
+The implementation is in `/src/app/api/quick-edit/route.ts:69`:
+
+```typescript
+const URL_REGEX = /https?:\/\/[^\s)>\]]+/g;
+const urls: string[] = instruction.match(URL_REGEX) || [];
+
+if (urls.length > 0) {
+  const scrapedResults = await Promise.all(
+    urls.map(async (url) => {
+      const result = await firecrawl.scrape(url, {
+        formats: ["markdown"],
+      });
+      return result.markdown;
+    })
+  );
+  // Inject into AI prompt
+}
+```
+
+## Conversations with Documentation
+
+The AI conversation system has a dedicated `scrapeUrls` tool that can fetch multiple URLs:
+
+```typescript
+scrapeUrls({
+  urls: [
+    "https://docs.stripe.com/api/checkout/sessions",
+    "https://docs.stripe.com/webhooks"
+  ]
+})
+```
+
+This allows the AI to gather comprehensive documentation before writing code.
+
+### Example Conversation
+
+```
+User: Build a subscription system using Stripe. Reference:
+- https://docs.stripe.com/billing/subscriptions/overview
+- https://docs.stripe.com/billing/subscriptions/build-subscriptions
+
+AI:
+1. Scrapes both Stripe documentation URLs
+2. Reads your current project structure
+3. Creates subscription management files following Stripe patterns
+4. Implements webhook handlers for subscription events
+5. Responds with setup instructions
+```
+
+## Supported Documentation Types
+
+Firecrawl can extract content from:
+
+<Tabs>
+  <Tab title="Official Docs">
+    Framework and library documentation sites:
+    - Next.js: `nextjs.org/docs/*`
+    - React: `react.dev/*`
+    - TypeScript: `typescriptlang.org/docs/*`
+    - Tailwind: `tailwindcss.com/docs/*`
+  </Tab>
+  
+  <Tab title="API References">
+    API documentation and references:
+    - Stripe: `docs.stripe.com/*`
+    - OpenAI: `platform.openai.com/docs/*`
+    - Anthropic: `docs.anthropic.com/*`
+    - GitHub: `docs.github.com/*`
+  </Tab>
+  
+  <Tab title="GitHub READMEs">
+    Repository documentation:
+    - README files: `github.com/user/repo#readme`
+    - Wiki pages: `github.com/user/repo/wiki/*`
+    - Markdown files: `github.com/user/repo/blob/main/docs/*`
+  </Tab>
+  
+  <Tab title="Tutorials & Guides">
+    Blog posts and tutorials with code examples:
+    - Dev.to articles
+    - Medium posts
+    - Personal tech blogs
+    - Stack Overflow answers (though less reliable)
+  </Tab>
+</Tabs>
+
+## Implementation Details
+
+### Quick Edit Scraping
+
+From `/src/app/api/quick-edit/route.ts:17`:
+
+```typescript
+const URL_REGEX = /https?:\/\/[^\s)>\]]+/g;
+
+const urls: string[] = instruction.match(URL_REGEX) || [];
+let documentationContext = "";
+
+if (urls.length > 0) {
+  const scrapedResults = await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const result = await firecrawl.scrape(url, {
+          formats: ["markdown"],
+        });
+        if (result.markdown) {
+          return `<doc url="${url}">\n${result.markdown}\n</doc>`;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  
+  const validResults = scrapedResults.filter(Boolean);
+  if (validResults.length > 0) {
+    documentationContext = `<documentation>\n${validResults.join("\n\n")}\n</documentation>`;
+  }
+}
+```
+
+### Conversation Scraping Tool
+
+From `/src/features/conversations/inngest/tools/scrape-urls.ts:11`:
+
+```typescript
+export const createScrapeUrlsTool = () => {
+  return createTool({
+    name: "scrapeUrls",
+    description:
+      "Scrape content from URLs to get documentation or reference material. " +
+      "Use this when the user provides URLs or references external documentation. " +
+      "Returns markdown content from the scraped pages.",
+    parameters: z.object({
+      urls: z.array(z.string()).describe("Array of URLs to scrape for content"),
+    }),
+    handler: async (params, { step: toolStep }) => {
+      const results: { url: string; content: string }[] = [];
+      
+      for (const url of urls) {
+        const result = await firecrawl.scrape(url, {
+          formats: ["markdown"],
+        });
+        if (result.markdown) {
+          results.push({ url, content: result.markdown });
+        }
+      }
+      
+      return JSON.stringify(results);
+    }
+  });
+};
+```
+
+## Error Handling
+
+<Warning>
+If a URL fails to scrape:
+- Quick Edit continues with whatever documentation was successfully fetched
+- Conversation tool returns "Failed to scrape URL: [url]" for that specific URL
+- Other URLs in the same request are still processed
+- The AI proceeds with available context
+</Warning>
+
+### Common Scraping Failures
+
+- **JavaScript-heavy sites** - Some sites require JS rendering (Firecrawl handles most cases)
+- **Rate limiting** - Too many requests to the same domain may be blocked
+- **Paywalled content** - Content behind authentication can't be scraped
+- **Malformed URLs** - Invalid URLs are skipped silently
+
+## Best Practices
+
+<Tabs>
+  <Tab title="Specific Pages">
+    Link to specific documentation pages, not homepages:
+    
+    **Good:**
+    ```
+https://nextjs.org/docs/app/api-reference/file-conventions/route
+    ```
+    
+    **Bad:**
+    ```
+https://nextjs.org
+    ```
+  </Tab>
+  
+  <Tab title="Multiple Sources">
+    Provide multiple URLs for comprehensive context:
+    
+    ```
+Create a payment flow using:
+- https://docs.stripe.com/payments/accept-a-payment
+- https://docs.stripe.com/payments/payment-intents
+- https://docs.stripe.com/webhooks/quickstart
+    ```
+  </Tab>
+  
+  <Tab title="Relevant Sections">
+    Use anchor links to jump to specific sections:
+    
+    ```
+https://react.dev/reference/react/useState#usage
+    ```
+    
+    (Though Firecrawl scrapes the full page, the AI can focus on relevant parts)
+  </Tab>
+  
+  <Tab title="Up-to-Date Docs">
+    Prefer official documentation over outdated tutorials:
+    
+    **Good:** Official framework docs
+    **Okay:** Recent (< 6 months) tutorials
+    **Bad:** 3-year-old blog posts
+  </Tab>
+</Tabs>
+
+## Configuration
+
+| Setting | Value | Location |
+|---------|-------|----------|
+| URL regex pattern | `/https?:\/\/[^\s)>\]]+/g` | `route.ts:17` |
+| Firecrawl format | `["markdown"]` | `route.ts:77`, `scrape-urls.ts:33` |
+| Timeout | Inherits from Firecrawl SDK | - |
+| Max URLs per request | Unlimited (all URLs in text) | - |
+
+## Firecrawl Setup
+
+Polaris uses the Firecrawl SDK initialized in `/src/lib/firecrawl.ts`:
+
+```typescript
+import Firecrawl from '@mendable/firecrawl-js';
+
+export const firecrawl = new Firecrawl({
+  apiKey: process.env.FIRECRAWL_API_KEY
+});
+```
+
+<Note>
+You need a **FIRECRAWL_API_KEY** environment variable for documentation scraping to work. Get an API key from [firecrawl.dev](https://firecrawl.dev).
+</Note>
+
+## Example Prompts
+
+### Quick Edit Examples
+
+```
+"add Zod validation following https://zod.dev"
+
+"use React Query patterns from https://tanstack.com/query/latest/docs/framework/react/overview"
+
+"implement auth with https://next-auth.js.org/getting-started/example"
+
+"style with Tailwind using https://tailwindcss.com/docs/utility-first"
+```
+
+### Conversation Examples
+
+```
+"Build a file upload component using https://uploadthing.com/docs"
+
+"Create API routes following https://nextjs.org/docs/app/api-reference/file-conventions/route"
+
+"Add database queries using https://orm.drizzle.team/docs/sql-schema-declaration"
+
+"Implement real-time features with https://docs.convex.dev/functions"
+```
+
+## Tips for Best Results
+
+1. **Include URLs in natural language** - "using [URL]" or "following [URL]" works well
+2. **Multiple related URLs** - Provide 2-3 related documentation pages for comprehensive context
+3. **Check scraped content quality** - Some sites format better as markdown than others
+4. **Prefer official docs** - Official documentation is more reliable than third-party tutorials
+5. **Use anchor links** - Link to specific sections when possible
+
+## Related Features
+
+- [Quick Edit](/ai/quick-edit) - Transform code with documentation-aware editing
+- [Conversations](/ai/conversations) - Chat with AI using the scrapeUrls tool
+- [Ghost Text Suggestions](/ai/suggestions) - Auto-complete suggestions (no URL scraping)
