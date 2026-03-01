@@ -1,0 +1,142 @@
+{
+  "projectType": "saas",
+  "projectName": "Polaris",
+  "projectDescription": "A browser-based cloud IDE with AI-powered code editing, real-time collaboration, and in-browser code execution.",
+  "theme": "aspen",
+  "primaryColor": "#6366f1",
+  "lightColor": "#818cf8",
+  "darkColor": "#4f46e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/code-editor",
+              "features/ai-assistant",
+              "features/file-management",
+              "features/project-management"
+            ]
+          },
+          {
+            "group": "AI Capabilities",
+            "pages": [
+              "ai/suggestions",
+              "ai/quick-edit",
+              "ai/conversations",
+              "ai/documentation-scraping"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/webcontainer",
+              "advanced/github-integration",
+              "advanced/terminal"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Setup",
+            "pages": [
+              "guides/authentication",
+              "guides/database-setup",
+              "guides/environment-variables"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "guides/project-structure",
+              "guides/editor-extensions",
+              "guides/background-jobs"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "guides/clerk-auth",
+              "guides/convex-database",
+              "guides/inngest-jobs",
+              "guides/ai-providers"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/overview",
+              "api/messages",
+              "api/suggestions",
+              "api/quick-edit"
+            ]
+          },
+          {
+            "group": "Convex Schema",
+            "pages": [
+              "api/schema/projects",
+              "api/schema/files",
+              "api/schema/conversations",
+              "api/schema/messages"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "api/tools/file-operations",
+              "api/tools/ai-tools"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "AI-powered code suggestions with ghost text",
+    "Quick edit with Cmd+K natural language instructions",
+    "Real-time conversation-based AI assistant",
+    "In-browser code execution with WebContainer",
+    "Multi-file project management with file explorer",
+    "GitHub import and export integration",
+    "Syntax highlighting for multiple languages",
+    "Real-time database synchronization with Convex",
+    "Background job processing with Inngest",
+    "CodeMirror 6 editor with custom extensions"
+  ],
+  "publicApiSurface": [
+    "POST /api/messages/stream - Stream AI conversation responses",
+    "POST /api/suggestion - Generate code suggestions",
+    "POST /api/quick-edit - AI-powered code editing",
+    "POST /api/projects/create - Create AI project",
+    "POST /api/github/import - Import GitHub repository",
+    "POST /api/github/export - Export to GitHub",
+    "Convex: projects.get - Get project by ID",
+    "Convex: projects.list - List user projects",
+    "Convex: files.get - Get file by ID",
+    "Convex: files.list - List project files",
+    "Convex: files.create - Create new file",
+    "Convex: files.update - Update file content",
+    "Convex: files.delete - Delete file",
+    "Convex: conversations.get - Get conversation",
+    "Convex: conversations.list - List conversations",
+    "Convex: messages.list - List conversation messages"
+  ]
+}
