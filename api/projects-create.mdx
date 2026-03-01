@@ -1,0 +1,190 @@
+---
+title: 'POST /api/projects/create-with-prompt'
+description: 'Create a new project with AI-generated code from a natural language prompt'
+---
+
+## Endpoint
+
+```
+POST /api/projects/create-with-prompt
+```
+
+Creates a new Polaris project and generates code based on a natural language prompt. This endpoint creates a project, conversation, and immediately starts AI code generation asynchronously.
+
+## Authentication
+
+Requires a valid Clerk session token. See [Authentication](/api/overview#authentication) for details.
+
+## Request Body
+
+<ParamField body="prompt" type="string" required>
+  Natural language description of what to build.
+  
+  Examples:
+  - "Create a React todo app with TypeScript"
+  - "Build a REST API with Express and PostgreSQL"
+  - "Make a landing page for a SaaS product"
+</ParamField>
+
+## Response
+
+<ResponseField name="projectId" type="string">
+  The Convex ID of the created project. Use this to navigate to the project IDE.
+</ResponseField>
+
+## Request Example
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('/api/projects/create-with-prompt', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    prompt: 'Create a React todo app with TypeScript and Tailwind CSS'
+  })
+});
+
+const data = await response.json();
+// Navigate to project
+window.location.href = `/projects/${data.projectId}`;
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-instance.com/api/projects/create-with-prompt',
+    json={'prompt': 'Create a React todo app with TypeScript and Tailwind CSS'}
+)
+
+data = response.json()
+print(f"Project ID: {data['projectId']}")
+```
+
+```bash cURL
+curl -X POST https://your-instance.com/api/projects/create-with-prompt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create a React todo app with TypeScript and Tailwind CSS"
+  }'
+```
+</CodeGroup>
+
+## Response Example
+
+<CodeGroup>
+```json 200 Success
+{
+  "projectId": "k57abc123def456"
+}
+```
+
+```json 401 Unauthorized
+{
+  "error": "Unauthorized"
+}
+```
+
+```json 400 Bad Request
+{
+  "error": "Prompt must be at least 1 character"
+}
+```
+</CodeGroup>
+
+## Project Creation Flow
+
+When you call this endpoint:
+
+<Steps>
+  <Step title="Project created">
+    A new project is created with a randomly generated name (e.g., "happy-elephant-blue").
+  </Step>
+
+  <Step title="Conversation started">
+    A new conversation is created in the project with the title "New Chat".
+  </Step>
+
+  <Step title="User message saved">
+    Your prompt is saved as the first user message in the conversation.
+  </Step>
+
+  <Step title="AI processing begins">
+    An assistant message placeholder is created with status `processing`, and an Inngest job is triggered.
+  </Step>
+
+  <Step title="Code generation">
+    The AI agent analyzes your prompt and generates the appropriate files and folder structure.
+  </Step>
+
+  <Step title="Files created">
+    Generated files are saved to the project and become visible in the file explorer.
+  </Step>
+</Steps>
+
+## Project Naming
+
+Projects are automatically named using a random combination of adjective + animal + color:
+
+- `happy-elephant-blue`
+- `clever-penguin-red`
+- `swift-dolphin-green`
+
+You can rename the project after creation using the project settings.
+
+## AI Code Generation
+
+The AI uses **Claude Opus 4** with access to these tools:
+
+- `createFiles` - Generate multiple files
+- `createFolder` - Create folder structure
+- `updateFile` - Modify generated files
+- `scrapeUrls` - Fetch documentation for frameworks/libraries
+
+<Tip>
+For best results, be specific about:
+- Framework/language (e.g., "React with TypeScript")
+- Styling approach (e.g., "Tailwind CSS")
+- Key features (e.g., "user authentication, dark mode")
+</Tip>
+
+## Monitoring Progress
+
+After receiving the `projectId`, navigate to the project IDE to watch the AI generate code in real-time:
+
+```javascript
+// Navigate to project
+window.location.href = `/projects/${projectId}`;
+```
+
+The conversation sidebar will show the AI's progress as it creates files and folders.
+
+## Example Prompts
+
+<AccordionGroup>
+  <Accordion title="Web applications">
+    - "Create a React dashboard with charts and data tables"
+    - "Build a Next.js blog with MDX support"
+    - "Make a Vue 3 e-commerce product page"
+  </Accordion>
+
+  <Accordion title="Backend APIs">
+    - "Build a REST API with Express and MongoDB"
+    - "Create a GraphQL API with Apollo Server"
+    - "Make a FastAPI backend with PostgreSQL"
+  </Accordion>
+
+  <Accordion title="Components & utilities">
+    - "Create a reusable React modal component with animations"
+    - "Build a date picker component with TypeScript"
+    - "Make a utility function for API error handling"
+  </Accordion>
+</AccordionGroup>
+
+## Learn More
+
+- [AI Conversations](/ai/conversations)
+- [Project Management](/features/project-management)
+- [File Operations Tools](/api/tools/file-operations)

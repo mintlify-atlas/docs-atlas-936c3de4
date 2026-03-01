@@ -1,0 +1,190 @@
+---
+title: 'POST /api/github/import'
+description: 'Import a GitHub repository into a Polaris project'
+---
+
+## Endpoint
+
+```
+POST /api/github/import
+```
+
+Imports a GitHub repository into a new Polaris project. This creates a project, clones the repository content, and processes all files asynchronously via Inngest background job.
+
+<Warning>
+This endpoint requires a **Pro plan** subscription.
+</Warning>
+
+## Authentication
+
+Requires:
+- Valid Clerk session token
+- GitHub OAuth connection via Clerk
+- Pro plan subscription
+
+## Request Body
+
+<ParamField body="url" type="string" required>
+  The full GitHub repository URL (e.g., `https://github.com/owner/repo`).
+  
+  Supports both HTTPS and SSH URLs. The `.git` extension is optional.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the import was successfully initiated.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  The Convex ID of the created project.
+</ResponseField>
+
+<ResponseField name="eventId" type="string">
+  The Inngest event ID for tracking the background import job.
+</ResponseField>
+
+## Request Example
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('/api/github/import', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    url: 'https://github.com/vercel/next.js'
+  })
+});
+
+const data = await response.json();
+console.log(data.projectId);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-instance.com/api/github/import',
+    json={'url': 'https://github.com/vercel/next.js'}
+)
+
+data = response.json()
+print(data['projectId'])
+```
+
+```bash cURL
+curl -X POST https://your-instance.com/api/github/import \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://github.com/vercel/next.js"}'
+```
+</CodeGroup>
+
+## Response Example
+
+<CodeGroup>
+```json 200 Success
+{
+  "success": true,
+  "projectId": "k57abc123def456",
+  "eventId": "01HQXYZ789ABCDEF"
+}
+```
+
+```json 401 Unauthorized
+{
+  "error": "Unauthorized"
+}
+```
+
+```json 403 Forbidden
+{
+  "error": "Pro plan required"
+}
+```
+
+```json 400 Bad Request
+{
+  "error": "GitHub not connected. Please reconnect your GitHub account."
+}
+```
+
+```json 400 Invalid URL
+{
+  "error": "Invalid GitHub URL"
+}
+```
+</CodeGroup>
+
+## Import Process
+
+The import happens asynchronously in the background:
+
+<Steps>
+  <Step title="Project creation">
+    A new Polaris project is created with the repository name.
+  </Step>
+
+  <Step title="Repository cloning">
+    The GitHub repository content is fetched using the GitHub API.
+  </Step>
+
+  <Step title="Folder structure">
+    All folders are created in hierarchical order (parent folders first).
+  </Step>
+
+  <Step title="File processing">
+    Files are imported:
+    - Text files: Content stored in database
+    - Binary files: Stored in Convex file storage
+  </Step>
+
+  <Step title="Status update">
+    Project `importStatus` is updated to `completed` or `failed`.
+  </Step>
+</Steps>
+
+## Monitoring Import Status
+
+Query the project to check import status:
+
+```javascript
+const project = await convex.query(api.projects.getById, { 
+  id: projectId 
+});
+
+if (project.importStatus === 'completed') {
+  console.log('Import finished!');
+} else if (project.importStatus === 'failed') {
+  console.log('Import failed');
+} else {
+  console.log('Still importing...');
+}
+```
+
+## Error Handling
+
+<AccordionGroup>
+  <Accordion title="Pro plan required">
+    GitHub import is a Pro feature. Upgrade your plan in the Polaris settings.
+  </Accordion>
+
+  <Accordion title="GitHub not connected">
+    Reconnect your GitHub account in Clerk settings. The OAuth token may have expired.
+  </Accordion>
+
+  <Accordion title="Invalid GitHub URL">
+    Ensure the URL is in the format `https://github.com/owner/repo` or `git@github.com:owner/repo.git`.
+  </Accordion>
+
+  <Accordion title="Private repository access denied">
+    Verify your GitHub OAuth token has access to the repository. You may need to grant additional permissions in GitHub settings.
+  </Accordion>
+</AccordionGroup>
+
+## Learn More
+
+- [GitHub Integration Guide](/advanced/github-integration)
+- [Background Jobs](/guides/background-jobs)
+- [Projects Schema](/api/schema/projects)

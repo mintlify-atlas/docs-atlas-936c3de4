@@ -1,0 +1,187 @@
+---
+title: 'POST /api/messages/cancel'
+description: 'Cancel all in-progress AI message processing for a project'
+---
+
+## Endpoint
+
+```
+POST /api/messages/cancel
+```
+
+Cancels all AI messages currently being processed in a project. This stops the AI agent mid-execution and marks messages as cancelled.
+
+## Authentication
+
+Requires a valid Clerk session token. See [Authentication](/api/overview#authentication) for details.
+
+## Request Body
+
+<ParamField body="projectId" type="string" required>
+  The Convex ID of the project containing messages to cancel.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Always `true` if the request was processed.
+</ResponseField>
+
+<ResponseField name="cancelled" type="boolean">
+  `true` if messages were cancelled, `false` if no messages were processing.
+</ResponseField>
+
+<ResponseField name="messageIds" type="array">
+  Array of Convex IDs for cancelled messages. Only present if `cancelled` is `true`.
+</ResponseField>
+
+## Request Example
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('/api/messages/cancel', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    projectId: 'k57abc123def456'
+  })
+});
+
+const data = await response.json();
+if (data.cancelled) {
+  console.log(`Cancelled ${data.messageIds.length} messages`);
+}
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-instance.com/api/messages/cancel',
+    json={'projectId': 'k57abc123def456'}
+)
+
+data = response.json()
+if data['cancelled']:
+    print(f"Cancelled {len(data['messageIds'])} messages")
+```
+
+```bash cURL
+curl -X POST https://your-instance.com/api/messages/cancel \
+  -H "Content-Type: application/json" \
+  -d '{"projectId": "k57abc123def456"}'
+```
+</CodeGroup>
+
+## Response Example
+
+<CodeGroup>
+```json 200 Messages Cancelled
+{
+  "success": true,
+  "cancelled": true,
+  "messageIds": [
+    "k58xyz789ghi012",
+    "k59abc456def789"
+  ]
+}
+```
+
+```json 200 No Messages Processing
+{
+  "success": true,
+  "cancelled": false
+}
+```
+
+```json 401 Unauthorized
+{
+  "error": "Unauthorized"
+}
+```
+</CodeGroup>
+
+## Cancellation Process
+
+When messages are cancelled:
+
+<Steps>
+  <Step title="Find processing messages">
+    All messages with `status: "processing"` in the project are identified.
+  </Step>
+
+  <Step title="Send cancel events">
+    Inngest cancel events are sent for each processing message.
+  </Step>
+
+  <Step title="Update status">
+    Message status is updated to `cancelled` in the database.
+  </Step>
+
+  <Step title="Stop AI agent">
+    The running AI agent receives the cancel signal and stops execution.
+  </Step>
+</Steps>
+
+## When to Use Cancellation
+
+<CardGroup cols={2}>
+  <Card title="Wrong request" icon="xmark">
+    User realizes they sent the wrong prompt or selected wrong files.
+  </Card>
+  <Card title="Too slow" icon="clock">
+    AI is taking too long and user wants to try a different approach.
+  </Card>
+  <Card title="Unexpected behavior" icon="triangle-exclamation">
+    AI is modifying files in an unexpected way.
+  </Card>
+  <Card title="Resource limits" icon="gauge-high">
+    Need to stop to avoid hitting API rate limits.
+  </Card>
+</CardGroup>
+
+## UI Integration
+
+Typically called when the user clicks a "Cancel" or "Stop" button in the conversation sidebar:
+
+```typescript
+const handleCancel = async () => {
+  const response = await fetch('/api/messages/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId })
+  });
+
+  const data = await response.json();
+  
+  if (data.cancelled) {
+    // Show success message
+    toast.success('AI stopped');
+  } else {
+    // No messages were processing
+    toast.info('No AI requests to cancel');
+  }
+};
+```
+
+## Behavior Notes
+
+<Note>
+Cancellation is **immediate** - the AI agent stops as soon as it receives the cancel signal. Any partial changes are NOT rolled back.
+</Note>
+
+<Warning>
+If the AI already modified files before cancellation, those changes remain. You may need to manually undo unwanted changes.
+</Warning>
+
+## Multiple Conversations
+
+This endpoint cancels **all processing messages** in the project, across all conversations. If you have multiple conversations with active AI requests, they will all be cancelled.
+
+## Learn More
+
+- [AI Conversations](/ai/conversations)
+- [Messages Schema](/api/schema/messages)
+- [Background Jobs](/guides/background-jobs)

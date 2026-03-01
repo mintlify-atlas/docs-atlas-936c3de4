@@ -97,8 +97,12 @@
             "pages": [
               "api/overview",
               "api/messages",
+              "api/messages-cancel",
               "api/suggestions",
-              "api/quick-edit"
+              "api/quick-edit",
+              "api/projects-create",
+              "api/github-import",
+              "api/github-export"
             ]
           },
           {

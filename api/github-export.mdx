@@ -1,0 +1,229 @@
+---
+title: 'POST /api/github/export'
+description: 'Export a Polaris project to a new GitHub repository'
+---
+
+## Endpoint
+
+```
+POST /api/github/export
+```
+
+Exports a Polaris project to a new GitHub repository. This creates a new repository on GitHub and pushes all project files asynchronously via Inngest background job.
+
+<Warning>
+This endpoint requires a **Pro plan** subscription.
+</Warning>
+
+## Authentication
+
+Requires:
+- Valid Clerk session token
+- GitHub OAuth connection via Clerk
+- Pro plan subscription
+
+## Request Body
+
+<ParamField body="projectId" type="string" required>
+  The Convex ID of the project to export.
+</ParamField>
+
+<ParamField body="repoName" type="string" required>
+  The name for the new GitHub repository (1-100 characters).
+  
+  Must follow GitHub naming rules: alphanumeric, hyphens, and underscores only.
+</ParamField>
+
+<ParamField body="visibility" type="enum" default="private">
+  Repository visibility: `public` or `private`.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional repository description (max 350 characters).
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the export was successfully initiated.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  The Convex ID of the exported project.
+</ResponseField>
+
+<ResponseField name="eventId" type="string">
+  The Inngest event ID for tracking the background export job.
+</ResponseField>
+
+## Request Example
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('/api/github/export', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    projectId: 'k57abc123def456',
+    repoName: 'my-polaris-project',
+    visibility: 'private',
+    description: 'Exported from Polaris IDE'
+  })
+});
+
+const data = await response.json();
+console.log(data.eventId);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-instance.com/api/github/export',
+    json={
+        'projectId': 'k57abc123def456',
+        'repoName': 'my-polaris-project',
+        'visibility': 'private',
+        'description': 'Exported from Polaris IDE'
+    }
+)
+
+data = response.json()
+print(data['eventId'])
+```
+
+```bash cURL
+curl -X POST https://your-instance.com/api/github/export \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectId": "k57abc123def456",
+    "repoName": "my-polaris-project",
+    "visibility": "private",
+    "description": "Exported from Polaris IDE"
+  }'
+```
+</CodeGroup>
+
+## Response Example
+
+<CodeGroup>
+```json 200 Success
+{
+  "success": true,
+  "projectId": "k57abc123def456",
+  "eventId": "01HQXYZ789ABCDEF"
+}
+```
+
+```json 401 Unauthorized
+{
+  "error": "Unauthorized"
+}
+```
+
+```json 403 Forbidden
+{
+  "error": "Pro plan required"
+}
+```
+
+```json 400 Bad Request
+{
+  "error": "GitHub not connected. Please reconnect your GitHub account."
+}
+```
+</CodeGroup>
+
+## Export Process
+
+The export happens asynchronously in the background:
+
+<Steps>
+  <Step title="Repository creation">
+    A new GitHub repository is created with the specified name and visibility.
+  </Step>
+
+  <Step title="File collection">
+    All project files are fetched from Convex database.
+  </Step>
+
+  <Step title="Blob creation">
+    Files are uploaded to GitHub as blobs via the Git Database API.
+  </Step>
+
+  <Step title="Tree creation">
+    A Git tree is created representing the complete folder structure.
+  </Step>
+
+  <Step title="Commit creation">
+    An initial commit is created with message "Initial commit from Polaris".
+  </Step>
+
+  <Step title="Branch update">
+    The main branch is updated to point to the new commit.
+  </Step>
+
+  <Step title="Status update">
+    Project `exportStatus` is updated to `completed` and `exportRepoUrl` is saved.
+  </Step>
+</Steps>
+
+## Monitoring Export Status
+
+Query the project to check export status:
+
+```javascript
+const project = await convex.query(api.projects.getById, { 
+  id: projectId 
+});
+
+if (project.exportStatus === 'completed') {
+  console.log('Exported to:', project.exportRepoUrl);
+} else if (project.exportStatus === 'failed') {
+  console.log('Export failed');
+} else if (project.exportStatus === 'cancelled') {
+  console.log('Export was cancelled');
+} else {
+  console.log('Still exporting...');
+}
+```
+
+## Cancelling Export
+
+You can cancel an in-progress export:
+
+```javascript
+const response = await fetch('/api/github/export/cancel', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ projectId })
+});
+```
+
+## Error Handling
+
+<AccordionGroup>
+  <Accordion title="Pro plan required">
+    GitHub export is a Pro feature. Upgrade your plan in the Polaris settings.
+  </Accordion>
+
+  <Accordion title="GitHub not connected">
+    Reconnect your GitHub account in Clerk settings. The OAuth token may have expired.
+  </Accordion>
+
+  <Accordion title="Repository name already exists">
+    Choose a different repository name. GitHub repository names must be unique within your account.
+  </Accordion>
+
+  <Accordion title="Export already in progress">
+    Wait for the current export to complete or cancel it before starting a new one.
+  </Accordion>
+</AccordionGroup>
+
+## Learn More
+
+- [GitHub Integration Guide](/advanced/github-integration)
+- [Background Jobs](/guides/background-jobs)
+- [Projects Schema](/api/schema/projects)

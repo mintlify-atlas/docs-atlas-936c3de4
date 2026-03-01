@@ -66,15 +66,39 @@ Rate limiting is enforced per user session. Contact your administrator for speci
 
 ## Available Endpoints
 
+### AI Features
+
 <CardGroup cols={2}>
   <Card title="Messages" icon="messages" href="/api/messages">
     Send messages to AI assistant and trigger code generation
+  </Card>
+  <Card title="Cancel Messages" icon="stop" href="/api/messages-cancel">
+    Cancel in-progress AI message processing
   </Card>
   <Card title="Suggestions" icon="wand-magic-sparkles" href="/api/suggestions">
     Get AI-powered code completions at cursor position
   </Card>
   <Card title="Quick Edit" icon="pen-to-square" href="/api/quick-edit">
     Edit selected code using natural language instructions
+  </Card>
+</CardGroup>
+
+### Projects
+
+<CardGroup cols={2}>
+  <Card title="Create with AI" icon="sparkles" href="/api/projects-create">
+    Create a new project from a natural language prompt
+  </Card>
+</CardGroup>
+
+### GitHub Integration
+
+<CardGroup cols={2}>
+  <Card title="Import Repository" icon="download" href="/api/github-import">
+    Import a GitHub repository into Polaris
+  </Card>
+  <Card title="Export to GitHub" icon="upload" href="/api/github-export">
+    Export a Polaris project to a new GitHub repository
   </Card>
 </CardGroup>
 
